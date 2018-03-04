@@ -1,6 +1,6 @@
 # Wii U Title Boot Editor
 
-A tool to edit you wii u titles' meta folder.
+A tool to edit your Wii U titles' meta folder.
 
 ![](image/wiiu-title-boot.png)
 
