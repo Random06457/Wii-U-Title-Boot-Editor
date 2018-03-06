@@ -8,7 +8,7 @@ A tool to edit your Wii U titles' meta folder.
 
 1. Go to the Homebrew launcher and run Ftpiiu Everywhere (can be downloaded here : https://github.com/FIX94/ftpiiu/releases).
 2. Run the App.
-3. Enter yout Wii U's IP¨and click on "Connect".
+3. Enter your Wii U's IP and click on "Connect".
 4. Select a title and edit whatever you want.
 5. Click on "Send Data".
 6. Done !
@@ -16,7 +16,7 @@ A tool to edit your Wii U titles' meta folder.
 ### Features
 
 - TGA Boot Image Editing + Signature
-- Full btsnd support
+- Full btsnd/wave support
 
 ### More
 
