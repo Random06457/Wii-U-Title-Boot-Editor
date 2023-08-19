@@ -4,6 +4,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb/stb_image_write.h>
 
 Image::Image(u32* data, size_t width, size_t height,
@@ -126,4 +127,10 @@ std::expected<Image, ImageError> Image::fromWiiU(const void* tga_data,
     }
 
     return Image(data, hdr->width, hdr->height);
+}
+
+bool Image::saveAsPng(const std::filesystem::path& path) const
+{
+    return stbi_write_png(path.c_str(), static_cast<int>(m_width),
+                          static_cast<int>(m_height), 4, data<void>(), 0) != 0;
 }

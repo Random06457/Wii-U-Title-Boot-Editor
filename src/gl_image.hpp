@@ -52,7 +52,7 @@ struct GlImage
             glDeleteTextures(1, &m_id);
     }
 
-    ImTextureID imTexId()
+    ImTextureID imTexId() const
     {
         return reinterpret_cast<ImTextureID>(static_cast<uintptr_t>(m_id));
     }

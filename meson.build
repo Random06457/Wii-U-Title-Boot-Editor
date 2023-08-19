@@ -36,6 +36,7 @@ warnings = [
 add_project_arguments(cxx.get_supported_arguments(warnings), language: 'cpp')
 
 src_files = [
+    'src/file_dialog.cpp',
     'src/fs.cpp',
     'src/image.cpp',
     'src/main_window.cpp',
@@ -54,7 +55,7 @@ imgui_dep = dependency('imgui')
 libgl_dep = dependency('GL')
 sdl2_dep = dependency('SDL2')
 stb_dep = dependency('stb')
-# ImGuiFileDialog_dep = dependency('ImGuiFileDialog')
+ImGuiFileDialog_dep = dependency('ImGuiFileDialog')
 
 exe = executable('wiiu-title-boot-editor',
     src_files,
@@ -63,7 +64,7 @@ exe = executable('wiiu-title-boot-editor',
         fmt_dep,
         libgl_dep,
         imgui_dep,
-        # ImGuiFileDialog_dep,
+        ImGuiFileDialog_dep,
         sdl2_dep,
         stb_dep,
     ],

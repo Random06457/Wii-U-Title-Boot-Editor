@@ -74,14 +74,11 @@ void MainWindow::renderSound()
                     100);
 
     float player_pos = player.getCurrTime();
-    if (ImGui::SliderFloat("## a", &player_pos, 0.0f,
+    if (ImGui::SliderFloat("## player time", &player_pos, 0.0f,
                            player.sound().getDuration(), "",
                            ImGuiSliderFlags_AlwaysClamp))
     {
-        // player.pause();
         player.setCurrTime(player_pos);
-        // player.setCurrTime(player.sound().getDuration() / 2);
-        // player.play();
     }
 
     for (size_t i = 0; i < player.sound().channels(); i++)
@@ -124,17 +121,63 @@ static ImVec2 fitImage(ImVec2 src, ImVec2 dst)
 
 void MainWindow::renderTex()
 {
-    ImGui::Image(m_curr_meta->tv_tex.imTexId(),
-                 fitImage(m_curr_meta->tv_tex.imSize(), { 300, 300 }));
-    ImGui::SameLine();
-    ImGui::Image(m_curr_meta->drc_tex.imTexId(),
-                 fitImage(m_curr_meta->drc_tex.imSize(), { 250, 250 }));
+    auto show_tex = [this](const GlImage& gl_img, const Image& img,
+                           const std::string& name, ImVec2 size)
+    {
+        if (ImGui::BeginPopupContextItem(name.c_str()))
+        {
+            if (ImGui::Selectable("Import"))
+            {
+                m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_Modal);
+                m_file_dialog.open(
+                    ".png,.jpg,.jpeg",
+                    [this, &gl_img](const std::string& path)
+                    {
+                        fmt::print("Importing from {}...\n", path);
+                        popup(
+                            [&gl_img]()
+                            {
+                                ImGui::Text(
+                                    fmt::format("Invalid Size: must be {} x{}.",
+                                                gl_img.width(), gl_img.height())
+                                        .c_str());
 
-    ImGui::Image(m_curr_meta->logo_tex.imTexId(),
-                 fitImage(m_curr_meta->logo_tex.imSize(), { 300, 300 }));
-    ImGui::SameLine();
-    ImGui::Image(m_curr_meta->icon_tex.imTexId(),
-                 fitImage(m_curr_meta->icon_tex.imSize(), { 150, 150 }));
+                                ImGui::SetCursorPosX(
+                                    ImGui::GetWindowWidth() / 2 - 60);
+                                if (ImGui::Button("OK", { 120, 0 }))
+                                    ImGui::CloseCurrentPopup();
+                            });
+                    });
+            }
+            if (ImGui::Selectable("Save"))
+            {
+                m_file_dialog.setDialogFlags(
+                    ImGuiFileDialogFlags_ConfirmOverwrite |
+                    ImGuiFileDialogFlags_Modal);
+                m_file_dialog.open(".png,.jpg,.jpeg",
+                                   [&img](const std::string& path)
+                                   { img.saveAsPng(path); });
+            }
+
+            ImGui::EndPopup();
+        }
+
+        ImGui::Text(name.c_str());
+        if (ImGui::ImageButton(gl_img.imTexId(),
+                               fitImage(gl_img.imSize(), size)))
+        {
+            ImGui::OpenPopup(name.c_str());
+        }
+    };
+
+    show_tex(m_curr_meta->tv_tex, m_curr_meta->meta.tvTex(), "TV Texture",
+             { 300, 300 });
+    show_tex(m_curr_meta->drc_tex, m_curr_meta->meta.drcTex(), "DRC Texture",
+             { 300, 300 });
+    show_tex(m_curr_meta->logo_tex, m_curr_meta->meta.logoTex(), "Logo Texture",
+             { 150, 150 });
+    show_tex(m_curr_meta->icon_tex, m_curr_meta->meta.iconTex(), "Icon Texture",
+             { 150, 150 });
 }
 
 static bool isValidIp(const char* ip_cstr)
@@ -264,6 +307,12 @@ void MainWindow::renderHeader()
     ImGui::EndChild();
 }
 
+void MainWindow::popup(std::function<void()> func)
+{
+    m_popup_func = func;
+    m_open_popup_req = true;
+}
+
 void MainWindow::render()
 {
     ImGuiWindowFlags window_flags = 0;
@@ -273,11 +322,35 @@ void MainWindow::render()
 
     ImGui::SetNextWindowSize({ 800, 700 });
     ImGui::SetNextWindowPos({ 0, 0 });
+
+    m_file_dialog.setWinFlags(window_flags);
+    m_file_dialog.render();
+
     ImGui::Begin("Main", nullptr, window_flags);
 
     // ImGuiIO& io = ImGui::GetIO();
     // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
     //             1000.0f / io.Framerate, io.Framerate);
+
+    if (m_open_popup_req)
+    {
+        ImGui::OpenPopup("ModalPopup");
+        m_open_popup_req = false;
+    }
+
+    {
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing,
+                                ImVec2(0.5f, 0.5f));
+        if (ImGui::BeginPopupModal("ModalPopup", NULL,
+                                   ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            if (m_popup_func)
+                m_popup_func();
+
+            ImGui::EndPopup();
+        }
+    }
 
     renderHeader();
 
@@ -289,13 +362,22 @@ void MainWindow::render()
 
         if (m_curr_meta)
         {
-            renderSound();
+            if (ImGui::BeginTabBar("## tabs"))
+            {
+                if (ImGui::BeginTabItem("Sound"))
+                {
+                    renderSound();
+                    ImGui::EndTabItem();
+                }
 
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
+                if (ImGui::BeginTabItem("Textures"))
+                {
+                    renderTex();
+                    ImGui::EndTabItem();
+                }
 
-            renderTex();
+                ImGui::EndTabBar();
+            }
         }
         ImGui::EndChild();
     }

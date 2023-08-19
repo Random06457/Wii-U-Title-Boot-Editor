@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <vector>
+#include "file_dialog.hpp"
 #include "gl_image.hpp"
 #include "sound_player.hpp"
 #include "title_meta.hpp"
@@ -30,6 +31,8 @@ private:
 
     void loadMetaCache();
 
+    void popup(std::function<void()> func);
+
 public:
     MainWindow();
 
@@ -42,4 +45,7 @@ private:
     char m_ip[4 * 4];
     bool m_connected = false;
     bool m_is_ip_valid = true;
+    FileDialog m_file_dialog;
+    std::function<void()> m_popup_func = nullptr;
+    bool m_open_popup_req = false;
 };

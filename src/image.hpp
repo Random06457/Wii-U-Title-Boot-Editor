@@ -1,6 +1,7 @@
 #pragma once
 
 #include <expected>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include "types.hpp"
@@ -39,6 +40,8 @@ public:
     }
     static std::expected<Image, ImageError> fromWiiU(const void* data,
                                                      size_t data_size);
+
+    bool saveAsPng(const std::filesystem::path& path) const;
 
     size_t width() const { return m_width; }
     size_t height() const { return m_height; }
