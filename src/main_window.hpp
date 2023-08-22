@@ -31,7 +31,8 @@ private:
 
     void loadMetaCache();
 
-    void popup(std::function<void()> func);
+    void showPopup(std::function<void()> func);
+    void showError(const std::string& error);
 
 public:
     MainWindow();

@@ -4,6 +4,7 @@
 #include <imgui.h>
 #include <string>
 #include "macro.hpp"
+#include "fs.hpp"
 #include "title_meta.hpp"
 
 MainWindow::MainWindow()
@@ -121,8 +122,8 @@ static ImVec2 fitImage(ImVec2 src, ImVec2 dst)
 
 void MainWindow::renderTex()
 {
-    auto show_tex = [this](const GlImage& gl_img, const Image& img,
-                           const std::string& name, ImVec2 size)
+    auto show_tex = [this](GlImage& gl_img, Image& img, const std::string& name,
+                           ImVec2 size)
     {
         if (ImGui::BeginPopupContextItem(name.c_str()))
         {
@@ -131,22 +132,28 @@ void MainWindow::renderTex()
                 m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_Modal);
                 m_file_dialog.open(
                     ".png,.jpg,.jpeg",
-                    [this, &gl_img](const std::string& path)
+                    [this, &img, &gl_img](const std::string& path)
                     {
-                        fmt::print("Importing from {}...\n", path);
-                        popup(
-                            [&gl_img]()
-                            {
-                                ImGui::Text(
-                                    fmt::format("Invalid Size: must be {} x{}.",
-                                                gl_img.width(), gl_img.height())
-                                        .c_str());
+                        auto img_file = File::readAllBytes(path);
+                        auto new_img = Image::fromStb(img_file);
 
-                                ImGui::SetCursorPosX(
-                                    ImGui::GetWindowWidth() / 2 - 60);
-                                if (ImGui::Button("OK", { 120, 0 }))
-                                    ImGui::CloseCurrentPopup();
-                            });
+                        if (!new_img)
+                        {
+                            showError("Invalid or unsupported file format!");
+                            return;
+                        }
+
+                        if (new_img->width() != img.width() ||
+                            new_img->height() != img.height())
+                        {
+                            showError(
+                                fmt::format("Invalid Size: must be {}x{}.",
+                                            img.width(), img.height()));
+                            return;
+                        }
+
+                        img = std::move(*new_img);
+                        gl_img = img;
                     });
             }
             if (ImGui::Selectable("Save"))
@@ -170,14 +177,26 @@ void MainWindow::renderTex()
         }
     };
 
-    show_tex(m_curr_meta->tv_tex, m_curr_meta->meta.tvTex(), "TV Texture",
-             { 300, 300 });
-    show_tex(m_curr_meta->drc_tex, m_curr_meta->meta.drcTex(), "DRC Texture",
-             { 300, 300 });
-    show_tex(m_curr_meta->logo_tex, m_curr_meta->meta.logoTex(), "Logo Texture",
-             { 150, 150 });
-    show_tex(m_curr_meta->icon_tex, m_curr_meta->meta.iconTex(), "Icon Texture",
-             { 150, 150 });
+    {
+
+        ImGui::BeginChild("## Big Textures", { 340, 0 });
+        show_tex(m_curr_meta->tv_tex, m_curr_meta->meta.tvTex(), "TV Texture",
+                 { 300, 300 });
+        ImGui::Spacing();
+        show_tex(m_curr_meta->drc_tex, m_curr_meta->meta.drcTex(),
+                 "DRC Texture", { 300, 300 });
+        ImGui::EndChild();
+    }
+    ImGui::SameLine();
+    {
+        ImGui::BeginChild("## Small Textures");
+        show_tex(m_curr_meta->logo_tex, m_curr_meta->meta.logoTex(),
+                 "Logo Texture", { 150, 150 });
+        ImGui::Spacing();
+        show_tex(m_curr_meta->icon_tex, m_curr_meta->meta.iconTex(),
+                 "Icon Texture", { 150, 150 });
+        ImGui::EndChild();
+    }
 }
 
 static bool isValidIp(const char* ip_cstr)
@@ -307,10 +326,23 @@ void MainWindow::renderHeader()
     ImGui::EndChild();
 }
 
-void MainWindow::popup(std::function<void()> func)
+void MainWindow::showPopup(std::function<void()> func)
 {
     m_popup_func = func;
     m_open_popup_req = true;
+}
+
+void MainWindow::showError(const std::string& msg)
+{
+    showPopup(
+        [msg]()
+        {
+            ImGui::Text(msg.c_str());
+
+            ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 60);
+            if (ImGui::Button("OK", { 120, 0 }))
+                ImGui::CloseCurrentPopup();
+        });
 }
 
 void MainWindow::render()
@@ -364,15 +396,15 @@ void MainWindow::render()
         {
             if (ImGui::BeginTabBar("## tabs"))
             {
-                if (ImGui::BeginTabItem("Sound"))
-                {
-                    renderSound();
-                    ImGui::EndTabItem();
-                }
-
                 if (ImGui::BeginTabItem("Textures"))
                 {
                     renderTex();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Sound"))
+                {
+                    renderSound();
                     ImGui::EndTabItem();
                 }
 

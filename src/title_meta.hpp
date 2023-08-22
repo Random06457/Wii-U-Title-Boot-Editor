@@ -35,6 +35,12 @@ public:
     const Image& logoTex() const { return m_logo_tex; }
     const Image& iconTex() const { return m_icon_tex; }
     const Sound& sound() const { return m_boot_sound; }
+    // deducing this when :/
+    Image& drcTex() { return m_drc_tex; }
+    Image& tvTex() { return m_tv_tex; }
+    Image& logoTex() { return m_logo_tex; }
+    Image& iconTex() { return m_icon_tex; }
+    Sound& sound() { return m_boot_sound; }
 
 private:
     std::filesystem::path m_dir;
