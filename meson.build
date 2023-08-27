@@ -35,6 +35,12 @@ warnings = [
 
 add_project_arguments(cxx.get_supported_arguments(warnings), language: 'cpp')
 
+# for some reason -Db_profile doesn't seem to work
+if (get_option('profile'))
+    add_project_arguments('-pg', language: 'cpp')
+    add_project_link_arguments('-pg', language: 'cpp')
+endif
+
 src_files = [
     'src/file_dialog.cpp',
     'src/fs.cpp',

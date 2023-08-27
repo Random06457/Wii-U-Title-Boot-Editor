@@ -2,3 +2,4 @@
 .vscode
 *.swp
 cache
+gmon.out
