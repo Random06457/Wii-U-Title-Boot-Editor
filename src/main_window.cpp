@@ -10,19 +10,10 @@
 MainWindow::MainWindow()
 {
     snprintf(m_ip, sizeof(m_ip), "192.168.0.10");
-    loadMetaCache();
 }
 
-void MainWindow::loadMetaCache()
-{
-    auto cache_dir = std::filesystem::directory_iterator("cache");
-    m_meta_dirs.clear();
-    for (auto dir : cache_dir)
-        m_meta_dirs.push_back(dir.path());
-}
-
-MainWindow::Selection::Selection(TitleMeta&& title_meta) :
-    meta(std::move(title_meta)),
+MainWindow::Selection::Selection(TitleMeta& title_meta) :
+    meta(title_meta),
     drc_tex(meta.drcTex()),
     tv_tex(meta.tvTex()),
     logo_tex(meta.logoTex()),
@@ -257,21 +248,20 @@ void MainWindow::renderTitleList()
     ImGui::Spacing();
     ImGui::Separator();
 
-    for (size_t i = 0; auto& dir : m_meta_dirs)
+    for (size_t i = 0; auto& title_id : m_title_mgr.getTitles())
     {
-        if (ImGui::Selectable(
-                fmt::format("{}", dir.filename().string()).c_str(),
-                i == m_selected_idx))
+        if (ImGui::Selectable(fmt::format("{}", title_id.title_id).c_str(),
+                              i == m_selected_idx))
         {
             if (i != m_selected_idx)
             {
-                auto meta = TitleMeta::fromDir(dir);
+                auto meta = m_title_mgr.getTitle(title_id);
                 if (!meta)
                 {
                     std::abort();
                 }
 
-                m_curr_meta = std::make_unique<Selection>(std::move(*meta));
+                m_curr_meta = std::make_unique<Selection>(**meta);
             }
             m_selected_idx = i;
         }

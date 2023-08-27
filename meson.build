@@ -50,6 +50,7 @@ src_files = [
     'src/sound_player.cpp',
     'src/sound.cpp',
     'src/title_meta.cpp',
+    'src/title_mgr.cpp',
 ]
 
 inc = [

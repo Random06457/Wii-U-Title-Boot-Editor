@@ -5,15 +5,16 @@
 #include "gl_image.hpp"
 #include "sound_player.hpp"
 #include "title_meta.hpp"
+#include "title_mgr.hpp"
 
 class MainWindow
 {
 private:
     struct Selection
     {
-        Selection(TitleMeta&& meta);
+        Selection(TitleMeta& meta);
 
-        TitleMeta meta;
+        TitleMeta& meta;
         GlImage drc_tex;
         GlImage tv_tex;
         GlImage logo_tex;
@@ -42,7 +43,7 @@ public:
 private:
     size_t m_selected_idx = SIZE_MAX;
     std::unique_ptr<Selection> m_curr_meta;
-    std::vector<std::filesystem::path> m_meta_dirs;
+    TitleMgr m_title_mgr;
     char m_ip[4 * 4];
     bool m_connected = false;
     bool m_is_ip_valid = true;
