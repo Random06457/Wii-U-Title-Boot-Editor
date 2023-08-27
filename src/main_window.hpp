@@ -49,4 +49,5 @@ private:
     FileDialog m_file_dialog;
     std::function<void()> m_popup_func = nullptr;
     bool m_open_popup_req = false;
+    int m_title_type = TitleType_MLC;
 };

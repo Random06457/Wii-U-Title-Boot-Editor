@@ -17,16 +17,31 @@ const std::vector<TitleId>& TitleMgr::getTitles()
     if (m_is_title_list_fetched)
         return m_titles;
 
-    auto cache_dir = std::filesystem::directory_iterator("cache");
     m_titles.clear();
 
-    for (auto dir : cache_dir)
+    auto add_titles =
+        [this](const std::filesystem::path& path, TitleType title_type)
     {
-        m_titles.push_back({
-            .title_id = dir.path().filename().string(),
-            .title_type = TitleType_MLC,
-        });
-    }
+        auto title_dir = std::filesystem::directory_iterator(path);
+
+        for (auto id_high : title_dir)
+        {
+            auto high_dir = std::filesystem::directory_iterator(id_high);
+            for (auto id_low : high_dir)
+            {
+                const std::string title_id =
+                    id_high.path().filename().string() +
+                    id_low.path().filename().string();
+                m_titles.push_back({
+                    .title_id = std::move(title_id),
+                    .title_type = title_type,
+                });
+            }
+        }
+    };
+
+    add_titles("wiiu/storage_mlc/usr/title", TitleType_MLC);
+    add_titles("wiiu/storage_usb/usr/title", TitleType_USB);
 
     return m_titles;
 }
@@ -39,7 +54,11 @@ auto TitleMgr::getTitle(const TitleId& title_id) -> std::expected<
     if (m_cache.contains(title_id))
         return &m_cache.at(title_id);
 
-    auto meta = TitleMeta::fromDir("cache/" + title_id.title_id);
+    auto meta = TitleMeta::fromDir(
+        std::string("wiiu/storage_") +
+        (title_id.title_type == TitleType_MLC ? "mlc" : "usb") + "/usr/title/" +
+        title_id.title_id.substr(0, 8) + "/" + title_id.title_id.substr(8, 8) +
+        "/meta");
     if (!meta)
         return std::unexpected(meta.error());
 

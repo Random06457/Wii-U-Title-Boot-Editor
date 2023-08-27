@@ -237,14 +237,17 @@ static bool isValidIp(const char* ip_cstr)
 
 void MainWindow::renderTitleList()
 {
-    static int combo_idx = 0;
     const char* labels[]{
-        "MLC",
-        "USB",
+        [TitleType_USB] = "USB",
+        [TitleType_MLC] = "MLC",
     };
     ImGui::BeginChild("Title Selector", ImVec2(200, 0), true);
 
-    ImGui::Combo("Storage", &combo_idx, labels, ARRAY_COUNT(labels));
+    if (ImGui::Combo("Storage", &m_title_type, labels, ARRAY_COUNT(labels)))
+    {
+        m_selected_idx = SIZE_MAX;
+        m_curr_meta.reset();
+    }
     ImGui::Spacing();
     ImGui::Separator();
 
@@ -252,6 +255,9 @@ void MainWindow::renderTitleList()
     {
         for (size_t i = 0; auto& title_id : m_title_mgr.getTitles())
         {
+            if (title_id.title_type != m_title_type)
+                continue;
+
             if (ImGui::Selectable(fmt::format("{}", title_id.title_id).c_str(),
                                   i == m_selected_idx))
             {
@@ -391,7 +397,9 @@ void MainWindow::render()
 
     renderHeader();
 
+    ImGui::BeginDisabled(!m_title_mgr.connected());
     renderTitleList();
+    ImGui::EndDisabled();
 
     ImGui::SameLine();
     {
