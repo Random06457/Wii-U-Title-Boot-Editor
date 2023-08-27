@@ -1,7 +1,19 @@
 #include "title_mgr.hpp"
+#include <cassert>
+
+void TitleMgr::connect(const std::string&)
+{
+    m_state = State_Connected;
+    m_cache.clear();
+    m_titles.clear();
+    m_is_title_list_fetched = false;
+    m_error.clear();
+}
 
 const std::vector<TitleId>& TitleMgr::getTitles()
 {
+    assert(m_state == State_Connected);
+
     if (m_is_title_list_fetched)
         return m_titles;
 
@@ -22,6 +34,8 @@ const std::vector<TitleId>& TitleMgr::getTitles()
 auto TitleMgr::getTitle(const TitleId& title_id) -> std::expected<
     TitleMeta*, std::variant<ImageError, SoundError, MetaDirMissingFileError>>
 {
+    assert(m_state == State_Connected);
+
     if (m_cache.contains(title_id))
         return &m_cache.at(title_id);
 

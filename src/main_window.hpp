@@ -45,7 +45,6 @@ private:
     std::unique_ptr<Selection> m_curr_meta;
     TitleMgr m_title_mgr;
     char m_ip[4 * 4];
-    bool m_connected = false;
     bool m_is_ip_valid = true;
     FileDialog m_file_dialog;
     std::function<void()> m_popup_func = nullptr;

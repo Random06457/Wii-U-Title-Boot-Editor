@@ -248,25 +248,28 @@ void MainWindow::renderTitleList()
     ImGui::Spacing();
     ImGui::Separator();
 
-    for (size_t i = 0; auto& title_id : m_title_mgr.getTitles())
+    if (m_title_mgr.connected())
     {
-        if (ImGui::Selectable(fmt::format("{}", title_id.title_id).c_str(),
-                              i == m_selected_idx))
+        for (size_t i = 0; auto& title_id : m_title_mgr.getTitles())
         {
-            if (i != m_selected_idx)
+            if (ImGui::Selectable(fmt::format("{}", title_id.title_id).c_str(),
+                                  i == m_selected_idx))
             {
-                auto meta = m_title_mgr.getTitle(title_id);
-                if (!meta)
+                if (i != m_selected_idx)
                 {
-                    std::abort();
+                    auto meta = m_title_mgr.getTitle(title_id);
+                    if (!meta)
+                    {
+                        std::abort();
+                    }
+
+                    m_curr_meta = std::make_unique<Selection>(**meta);
                 }
-
-                m_curr_meta = std::make_unique<Selection>(**meta);
+                m_selected_idx = i;
             }
-            m_selected_idx = i;
-        }
 
-        i++;
+            i++;
+        }
     }
 
     ImGui::EndChild();
@@ -283,7 +286,7 @@ void MainWindow::renderHeader()
     if (!old_valid)
         ImGui::PushStyleColor(ImGuiCol_Text, { 255, 0, 0, 255 });
 
-    ImGui::BeginDisabled(m_connected);
+    ImGui::BeginDisabled(m_title_mgr.connected());
     if (ImGui::InputText("##IP", m_ip, sizeof(m_ip)))
     {
         m_is_ip_valid = isValidIp(m_ip);
@@ -292,17 +295,29 @@ void MainWindow::renderHeader()
 
     ImGui::SameLine();
 
-    if (m_connected)
+    if (m_title_mgr.connectionFailed())
+    {
+        showError(m_title_mgr.errorMsg());
+        m_title_mgr.clearError();
+    }
+
+    if (m_title_mgr.connected())
     {
         ImGui::PushStyleColor(ImGuiCol_Text, { 0, 255, 0, 255 });
         ImGui::Text("Connected");
+        ImGui::PopStyleColor();
+    }
+    else if (m_title_mgr.connecting())
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, { 255, 255, 0, 255 });
+        ImGui::Text("Connecting...");
         ImGui::PopStyleColor();
     }
     else if (old_valid)
     {
         if (ImGui::Button("Connect"))
         {
-            m_connected = true;
+            m_title_mgr.connect(m_ip);
         }
     }
     else
