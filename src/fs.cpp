@@ -30,8 +30,12 @@ std::vector<u8> File::readAllBytes(const std::filesystem::path& path)
     if (!fs.is_open())
         std::abort();
 
-    std::vector<u8> ret((std::istreambuf_iterator<char>(fs)),
-                        (std::istreambuf_iterator<char>()));
+    fs.seekg(0, std::ios::end);
+    std::streampos file_size = fs.tellg();
+    fs.seekg(0, std::ios::beg);
+
+    std::vector<u8> ret(file_size);
+    fs.read(reinterpret_cast<char*>(ret.data()), file_size);
 
     return ret;
 }
