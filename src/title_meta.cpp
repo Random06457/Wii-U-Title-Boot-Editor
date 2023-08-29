@@ -1,10 +1,8 @@
 #include "title_meta.hpp"
 #include "fs.hpp"
 
-TitleMeta::TitleMeta(const std::filesystem::path& path, Image&& drc_tex,
-                     Image&& tv_tex, Image&& logo_tex, Image&& icon_tex,
-                     Sound&& boot_sound) :
-    m_dir(path),
+TitleMeta::TitleMeta(Image&& drc_tex, Image&& tv_tex, Image&& logo_tex,
+                     Image&& icon_tex, Sound&& boot_sound) :
     m_drc_tex(std::move(drc_tex)),
     m_tv_tex(std::move(tv_tex)),
     m_logo_tex(std::move(logo_tex)),
@@ -19,7 +17,6 @@ TitleMeta::~TitleMeta()
 
 TitleMeta& TitleMeta::operator=(TitleMeta&& other)
 {
-    m_dir = other.m_dir;
     m_drc_tex = std::move(other.m_drc_tex);
     m_tv_tex = std::move(other.m_tv_tex);
     m_logo_tex = std::move(other.m_logo_tex);
@@ -68,7 +65,7 @@ auto TitleMeta::fromDir(const std::filesystem::path& path) -> std::expected<
     if (!boot_sound)
         return std::unexpected(boot_sound.error());
 
-    return TitleMeta(path, std::move(*drc_tex), std::move(*tv_tex),
+    return TitleMeta(std::move(*drc_tex), std::move(*tv_tex),
                      std::move(*logo_tex), std::move(*icon_tex),
                      std::move(*boot_sound));
 }

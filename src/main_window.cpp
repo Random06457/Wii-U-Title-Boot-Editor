@@ -6,6 +6,7 @@
 #include "macro.hpp"
 #include "fs.hpp"
 #include "title_meta.hpp"
+#include "utils.hpp"
 
 MainWindow::MainWindow()
 {
@@ -266,7 +267,32 @@ void MainWindow::renderTitleList()
                     auto meta = m_title_mgr.getTitle(title_id);
                     if (!meta)
                     {
-                        std::abort();
+                        std::visit(
+                            overloaded{
+                                [this](const WiiuConnexionError& err)
+                                {
+                                    showError(err.error);
+                                    m_curr_meta.reset();
+                                    m_title_mgr.cleanup();
+                                },
+                                [this](const MetaDirMissingFileError& err) {
+                                    showError(fmt::format("Could not find {}",
+                                                          err.filename));
+                                },
+                                [this](const SoundError&)
+                                { showError("Invalid BTSND File"); },
+                                [this](const ImageError&) {
+                                    showError(
+                                        "Invalid or unsupported TGA File");
+                                } },
+                            meta.error());
+
+                        if (std::holds_alternative<WiiuConnexionError>(
+                                meta.error()))
+                        {
+                            break;
+                        }
+                        continue;
                     }
 
                     m_curr_meta = std::make_unique<Selection>(**meta);
@@ -301,12 +327,6 @@ void MainWindow::renderHeader()
 
     ImGui::SameLine();
 
-    if (m_title_mgr.connectionFailed())
-    {
-        showError(m_title_mgr.errorMsg());
-        m_title_mgr.clearError();
-    }
-
     if (m_title_mgr.connected())
     {
         ImGui::PushStyleColor(ImGuiCol_Text, { 0, 255, 0, 255 });
@@ -323,7 +343,12 @@ void MainWindow::renderHeader()
     {
         if (ImGui::Button("Connect"))
         {
-            m_title_mgr.connect(m_ip);
+            auto res = m_title_mgr.connect(m_ip);
+            if (!res)
+            {
+                showError(res.error().error);
+                m_title_mgr.cleanup();
+            }
         }
     }
     else

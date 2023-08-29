@@ -14,12 +14,9 @@ struct MetaDirMissingFileError
 
 class TitleMeta
 {
-private:
-    TitleMeta(const std::filesystem::path& path, Image&& drc_tex,
-              Image&& tv_tex, Image&& logo_tex, Image&& icon_tex,
-              Sound&& boot_sound);
-
 public:
+    TitleMeta(Image&& drc_tex, Image&& tv_tex, Image&& logo_tex,
+              Image&& icon_tex, Sound&& boot_sound);
     ~TitleMeta();
     TitleMeta(const TitleMeta&) = delete;
     TitleMeta(TitleMeta&& other) { *this = std::move(other); }
@@ -43,7 +40,6 @@ public:
     Sound& sound() { return m_boot_sound; }
 
 private:
-    std::filesystem::path m_dir;
     Image m_drc_tex;
     Image m_tv_tex;
     Image m_logo_tex;

@@ -3,6 +3,8 @@
 #include <string>
 #include <unordered_map>
 #include "title_meta.hpp"
+#define LINUX
+#include <FTP/FTPClient.h>
 
 enum TitleType
 {
@@ -29,6 +31,11 @@ struct std::hash<TitleId>
     }
 };
 
+struct WiiuConnexionError
+{
+    std::string error;
+};
+
 class TitleMgr
 {
 public:
@@ -41,11 +48,17 @@ public:
     };
 
 public:
-    void connect(const std::string& ip);
-    void clearError()
+    TitleMgr();
+
+    std::expected<void, WiiuConnexionError> connect(const std::string& ip);
+
+    void cleanup()
     {
+        m_ftp.CleanupSession();
         m_error.clear();
         m_state = State_Disconnected;
+        m_titles.clear();
+        m_cache.clear();
     }
 
     bool connected() const { return m_state == State_Connected; }
@@ -54,16 +67,20 @@ public:
     bool connectionFailed() const { return m_state == State_ConnectionFailed; }
     State state() const { return m_state; }
     const std::string& errorMsg() const { return m_error; }
+    const std::vector<TitleId>& getTitles() { return m_titles; }
 
-    const std::vector<TitleId>& getTitles();
     auto getTitle(const TitleId& title_id)
-        -> std::expected<TitleMeta*, std::variant<ImageError, SoundError,
-                                                  MetaDirMissingFileError>>;
+        -> std::expected<TitleMeta*,
+                         std::variant<WiiuConnexionError, ImageError,
+                                      SoundError, MetaDirMissingFileError>>;
+
+private:
+    std::vector<std::string> ls(const std::filesystem::path& dir);
 
 private:
     std::unordered_map<TitleId, TitleMeta> m_cache;
     std::vector<TitleId> m_titles;
-    bool m_is_title_list_fetched = false;
     State m_state = State_Disconnected;
     std::string m_error;
+    embeddedmz::CFTPClient m_ftp;
 };
