@@ -1,9 +1,7 @@
 project('wiiu-title-boot-editor', 'cpp',
     default_options : [
-        # 'warning_level=3',
-        # 'cpp_args=-std=c++23',
-        # 'werror=true',
-        # 'b_sanitize=address'
+        'warning_level=3',
+        'cpp_args=-std=c++23',
     ],
     subproject_dir: '3rd-party'
 )
@@ -16,19 +14,18 @@ add_project_arguments('-std=c++23', language: 'cpp')
 if not cxx.compiles(
     '''
     #include <expected>
-    int main() {
-        return 0;
-    }''',
+    #if !defined(__cpp_lib_expected)
+    #error "std::expected not supported"
+    #endif
+    ''',
     args : '-std=c++23',
     )
-    error('std::expected not supported.')
+    error('std::expected not supported. Please use another compiler that supports C++23 with std::expected.')
 endif
 
 
 warnings = [
-    '-Wall',
-    '-Wextra',
-    '-Werror',
+    '-Wno-pedantic',
     '-Wshadow',
     '-Wconversion',
 ]
