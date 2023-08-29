@@ -2,6 +2,7 @@
 #include <cmath>
 #include <fmt/format.h>
 #include <imgui.h>
+#include <ranges>
 #include <string>
 #include "macro.hpp"
 #include "fs.hpp"
@@ -246,7 +247,7 @@ void MainWindow::renderTitleList()
 
     if (ImGui::Combo("Storage", &m_title_type, labels, ARRAY_COUNT(labels)))
     {
-        m_selected_idx = SIZE_MAX;
+        m_selected_idx = -1;
         m_curr_meta.reset();
     }
     ImGui::Spacing();
@@ -254,8 +255,15 @@ void MainWindow::renderTitleList()
 
     if (m_title_mgr.connected())
     {
-        for (size_t i = 0; auto& title_id : m_title_mgr.getTitles())
+#ifdef __cpp_lib_ranges_enumerate
+        for (auto [i, title_id] :
+             m_title_mgr.getTitles() | std::views::enumerate)
         {
+#else
+        for (long i = 0; auto& title_id : m_title_mgr.getTitles())
+        {
+            ScopeExit i_inc([&i] { i++; });
+#endif
             if (title_id.title_type != m_title_type)
                 continue;
 
@@ -299,8 +307,6 @@ void MainWindow::renderTitleList()
                 }
                 m_selected_idx = i;
             }
-
-            i++;
         }
     }
 

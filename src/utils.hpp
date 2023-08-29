@@ -42,3 +42,21 @@ auto variant_cast(const std::variant<Args...>& v) -> variant_cast_proxy<Args...>
         }                                                                      \
         std::move(err.value());                                                \
     })
+
+#if __has_include(<experimental/scope>)
+#include <experimental/scope>
+template<typename T>
+using ScopeExit = std::experimental::scope_exit<T>;
+#else
+
+template<typename T>
+class ScopeExit
+{
+public:
+    ScopeExit(T func) : m_func(std::forward<T>(func)) {}
+    ~ScopeExit() { m_func(); }
+
+private:
+    T m_func;
+};
+#endif

@@ -41,7 +41,7 @@ public:
     void render();
 
 private:
-    size_t m_selected_idx = SIZE_MAX;
+    long m_selected_idx = -1;
     std::unique_ptr<Selection> m_curr_meta;
     TitleMgr m_title_mgr;
     char m_ip[4 * 4];
