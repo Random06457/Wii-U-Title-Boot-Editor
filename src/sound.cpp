@@ -81,8 +81,13 @@ std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
 {
     auto read32 = [&data](size_t off)
     {
+#ifdef __cpp_lib_byteswap
         return std::byteswap(*reinterpret_cast<const u32*>(
             reinterpret_cast<const u8*>(data) + off));
+#else
+        return __builtin_bswap32(*reinterpret_cast<const u32*>(
+            reinterpret_cast<const u8*>(data) + off));
+#endif
     };
 
     if (data_size < 8)
@@ -102,7 +107,11 @@ std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
         u16* samples16 = reinterpret_cast<u16*>(vec.data());
         for (size_t i = 0; i < vec.size() / sizeof(u16); i++)
         {
+#ifdef __cpp_lib_byteswap
             samples16[i] = std::byteswap(samples16[i]);
+#else
+            samples16[i] = __builtin_bswap16(samples16[i]);
+#endif
         }
     }
 

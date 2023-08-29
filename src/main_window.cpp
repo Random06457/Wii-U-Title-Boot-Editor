@@ -161,7 +161,7 @@ void MainWindow::renderTex()
             ImGui::EndPopup();
         }
 
-        ImGui::Text(name.c_str());
+        ImGui::Text("%s", name.c_str());
         if (ImGui::ImageButton(gl_img.imTexId(),
                                fitImage(gl_img.imSize(), size)))
         {
@@ -373,7 +373,7 @@ void MainWindow::showError(const std::string& msg)
     showPopup(
         [msg]()
         {
-            ImGui::Text(msg.c_str());
+            ImGui::Text("%s", msg.c_str());
 
             ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 60);
             if (ImGui::Button("OK", { 120, 0 }))
