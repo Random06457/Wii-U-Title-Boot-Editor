@@ -16,6 +16,10 @@ TitleMgr::TitleMgr() :
 {
     m_ftp.SetTimeout(10);
 }
+TitleMgr::~TitleMgr()
+{
+    cleanup();
+}
 
 static std::vector<std::string> splitLs(const std::string& s)
 {

@@ -49,6 +49,7 @@ public:
 
 public:
     TitleMgr();
+    ~TitleMgr();
 
     std::expected<void, WiiuConnexionError> connect(const std::string& ip);
 
