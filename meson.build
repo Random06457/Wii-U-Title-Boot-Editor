@@ -63,6 +63,13 @@ libgl_dep = dependency('GL')
 sdl2_dep = dependency('SDL2')
 stb_dep = dependency('stb')
 ImGuiFileDialog_dep = dependency('ImGuiFileDialog')
+curl_dep = dependency('libcurl')
+
+
+cmake = import('cmake')
+ftpclient_proj = cmake.subproject('ftpclient-cpp')
+ftpclient_dep = ftpclient_proj.dependency('ftpclient')
+
 
 exe = executable('wiiu-title-boot-editor',
     src_files,
@@ -74,6 +81,8 @@ exe = executable('wiiu-title-boot-editor',
         ImGuiFileDialog_dep,
         sdl2_dep,
         stb_dep,
+        ftpclient_dep,
+        curl_dep,
     ],
     install: true
 )

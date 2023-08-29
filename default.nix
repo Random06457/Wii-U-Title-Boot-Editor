@@ -16,6 +16,7 @@ stdenv.mkDerivation {
         gcc13
         meson
         ninja
+        cmake
     ];
 
     buildInputs = [
@@ -23,5 +24,6 @@ stdenv.mkDerivation {
         SDL2
         fmt_9
         stb
+        curl
     ];
 }
