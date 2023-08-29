@@ -157,11 +157,11 @@ class CFTPClient {
    /* Checks a single file's size and mtime from an FTP server */
    bool Info(const std::string &strRemoteFile, struct FileInfo &oFileInfo) const;
 
-   bool List(const std::string &strRemoteFolder, std::string &strList, bool bOnlyNames = true) const;
+   bool List(const std::string &strRemoteFolder, std::string &strList, CURLcode& code, bool bOnlyNames = true) const;
 
    bool DownloadFile(const std::string &strLocalFile, const std::string &strRemoteFile) const;
 
-   bool DownloadFile(const std::string &strRemoteFile, std::vector<char> &data) const;
+   bool DownloadFile(const std::string &strRemoteFile, std::vector<char> &data, CURLcode& code) const;
 
    bool DownloadWildcard(const std::string &strLocalDir, const std::string &strRemoteWildcard) const;
 

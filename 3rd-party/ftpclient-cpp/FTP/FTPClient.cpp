@@ -560,7 +560,8 @@ bool CFTPClient::Info(const std::string &strRemoteFile, struct FileInfo &oFileIn
  *    // lists the root of the remote FTP server with all the infos.
  * @endcode
  */
-bool CFTPClient::List(const std::string &strRemoteFolder, std::string &strList, bool bOnlyNames /* = true */) const {
+bool CFTPClient::List(const std::string &strRemoteFolder, std::string &strList, CURLcode& code, bool bOnlyNames /* = true */) const {
+   code = CURLE_OK;
    if (strRemoteFolder.empty()) return false;
 
    if (!m_pCurlSession) {
@@ -583,6 +584,7 @@ bool CFTPClient::List(const std::string &strRemoteFolder, std::string &strList, 
    curl_easy_setopt(m_pCurlSession, CURLOPT_WRITEDATA, &strList);
 
    CURLcode res = Perform();
+   code = res;
 
    if (CURLE_OK == res)
       bRet = true;
@@ -663,7 +665,8 @@ bool CFTPClient::DownloadFile(const std::string &strLocalFile, const std::string
  * @retval false  The file couldn't be downloaded. Check the log messages for
  * more information.
  */
-bool CFTPClient::DownloadFile(const std::string &strRemoteFile, std::vector<char> &data) const {
+bool CFTPClient::DownloadFile(const std::string &strRemoteFile, std::vector<char> &data, CURLcode& code) const {
+   code = CURLE_OK;
    if (strRemoteFile.empty()) return false;
    if (!m_pCurlSession) {
       if (m_eSettingsFlags & ENABLE_LOG) m_oLog(LOG_ERROR_CURL_NOT_INIT_MSG);
@@ -679,6 +682,7 @@ bool CFTPClient::DownloadFile(const std::string &strRemoteFile, std::vector<char
    curl_easy_setopt(m_pCurlSession, CURLOPT_WRITEDATA, &data);
 
    CURLcode res = Perform();
+   code = res;
 
    if (res != CURLE_OK) {
       if (m_eSettingsFlags & ENABLE_LOG)
