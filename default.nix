@@ -1,8 +1,8 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> {}, cxx ? pkgs.gcc13 }:
 
 with pkgs;
 
-stdenv.mkDerivation {
+cxx.stdenv.mkDerivation {
     # dlopen gets overriden by ASAN, causing it to not use the proper rpath, compiling without ASAN works fine
     LD_LIBRARY_PATH="/run/opengl-driver/lib:/run/opengl-driver-32/lib:" + (lib.makeLibraryPath [ pipewire ]);
     NIX_HARDENING_ENABLE="";
@@ -13,7 +13,7 @@ stdenv.mkDerivation {
     src = ./.;
 
     nativeBuildInputs = [
-        gcc13
+        cxx
         meson
         ninja
         cmake
