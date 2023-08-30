@@ -10,6 +10,14 @@ enum SoundError
     SoundError_InvalidOrUnsupportedWaveFile,
 };
 
+enum WaveFileError
+{
+    WaveFileError_FileTooSmall,
+    WaveFileError_InvalidHeader,
+    WaveFileError_DuplicateSections,
+    WaveFileError_MissingSection,
+};
+
 enum SoundTarget : u32
 {
     SoundTarget_Tv = 0,
@@ -39,13 +47,14 @@ public:
     static std::expected<Sound, SoundError> fromBtsnd(const void* data,
                                                       size_t data_size);
     template<typename T>
-    static std::expected<Sound, SoundError> fromWave(const std::vector<T>& data)
+    static std::expected<Sound, WaveFileError>
+    fromWave(const std::vector<T>& data)
     {
         return fromWave(reinterpret_cast<const void*>(data.data()),
                         data.size() * sizeof(T));
     }
-    static std::expected<Sound, SoundError> fromWave(const void* data,
-                                                     size_t data_size);
+    static std::expected<Sound, WaveFileError> fromWave(const void* data,
+                                                        size_t data_size);
 
     template<typename T>
     const T* sampleData(size_t off) const

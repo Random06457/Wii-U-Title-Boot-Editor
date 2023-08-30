@@ -2,11 +2,43 @@
 
 #include <fmt/format.h>
 
-SoundPlayer ::SoundPlayer(const Sound& sound) :
-    m_curr_sound(sound),
+SoundPlayer ::SoundPlayer(const Sound* sound) :
+    m_curr_sound(nullptr),
     m_curr_buffered(0),
     m_audio_device(0)
 {
+    setSound(sound);
+}
+
+void SoundPlayer::setSound(const Sound* sound)
+{
+    if (m_audio_device != 0)
+        pause();
+
+    m_curr_buffered = 0;
+
+    // assign new sound
+    auto old_sound = m_curr_sound;
+    m_curr_sound = sound;
+
+    // clear everything
+    if (sound == nullptr)
+    {
+        if (m_audio_device != 0)
+            SDL_CloseAudioDevice(m_audio_device);
+        m_audio_device = 0;
+        return;
+    }
+
+    // if the sound is in the same format, no need to create a new device
+    if (old_sound != nullptr &&
+        old_sound->bitsPerSample() == sound->bitsPerSample() &&
+        old_sound->sampleRate() == sound->sampleRate() &&
+        old_sound->channels() == sound->channels())
+    {
+        return;
+    }
+
     if (!(SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO))
     {
         if (SDL_Init(SDL_INIT_AUDIO) != 0)
@@ -34,14 +66,14 @@ SoundPlayer ::SoundPlayer(const Sound& sound) :
         }
     };
 
-    wanted.freq = (int)m_curr_sound.sampleRate();
-    if (m_curr_sound.bitsPerSample() == 8)
+    wanted.freq = (int)m_curr_sound->sampleRate();
+    if (m_curr_sound->bitsPerSample() == 8)
         wanted.format = AUDIO_S8;
-    else if (m_curr_sound.bitsPerSample() == 16)
+    else if (m_curr_sound->bitsPerSample() == 16)
         wanted.format = AUDIO_S16;
     else
         std::abort();
-    wanted.channels = (Uint8)m_curr_sound.channels();
+    wanted.channels = (Uint8)m_curr_sound->channels();
     wanted.samples = 1024;
     wanted.callback = fill_audio;
     wanted.userdata = this;
@@ -53,4 +85,13 @@ SoundPlayer ::SoundPlayer(const Sound& sound) :
         fmt::print(stderr, "SDL_OpenAudio: {}\n", SDL_GetError());
         std::abort();
     }
+}
+
+SoundPlayer::~SoundPlayer()
+{
+    if (m_audio_device == 0)
+        return;
+
+    pause();
+    SDL_CloseAudioDevice(m_audio_device);
 }

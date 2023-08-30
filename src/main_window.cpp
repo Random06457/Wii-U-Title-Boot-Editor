@@ -20,7 +20,7 @@ MainWindow::Selection::Selection(TitleMeta& title_meta) :
     tv_tex(meta.tvTex()),
     logo_tex(meta.logoTex()),
     icon_tex(meta.iconTex()),
-    player(meta.sound()),
+    player(&meta.sound()),
     target_idx(static_cast<int>(meta.sound().target())),
     loop_sample(static_cast<int>(meta.sound().loopSample()))
 {
@@ -103,7 +103,26 @@ void MainWindow::renderSound()
                          { 0.0F, 100.0f });
     }
 
-    if (ImGui::Button("Export To WAVE"))
+    if (ImGui::Button("Import"))
+    {
+        m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_Modal);
+        m_file_dialog.open(
+            ".wav",
+            [this](const std::string& path)
+            {
+                auto wave = File::readAllBytes(path);
+                auto new_sound = Sound::fromWave(wave);
+                if (!new_sound)
+                {
+                    showError("Invalid or corrupted sound");
+                    return;
+                }
+                m_curr_meta->meta.sound() = std::move(*new_sound);
+                m_curr_meta->player.setSound(&m_curr_meta->meta.sound());
+            });
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Export"))
     {
         m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_ConfirmOverwrite |
                                      ImGuiFileDialogFlags_Modal);

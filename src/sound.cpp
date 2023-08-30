@@ -139,9 +139,75 @@ std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
                  sample_loop, target);
 }
 
-std::expected<Sound, SoundError> Sound::fromWave(const void*, size_t)
+std::expected<Sound, WaveFileError> Sound::fromWave(const void* data,
+                                                    size_t data_size)
 {
-    return std::unexpected(SoundError_InvalidOrUnsupportedWaveFile);
+    if (data_size < sizeof(RiffHeader) + sizeof(RiffSection) +
+                        sizeof(FmtSection) + sizeof(RiffSection))
+        return std::unexpected(WaveFileError_FileTooSmall);
+
+    size_t pos = 0;
+
+    auto read = [&pos, &data]<typename T>() -> T*
+    {
+        auto ret = reinterpret_cast<T*>(reinterpret_cast<intptr_t>(data) + pos);
+        pos += sizeof(T);
+        return ret;
+    };
+    auto readVec = [&pos, &data]<typename T>(size_t n) -> std::vector<T>
+    {
+        auto ret = reinterpret_cast<T*>(reinterpret_cast<intptr_t>(data) + pos);
+        pos += n;
+        std::vector<T> vec(n);
+        std::memcpy(vec.data(), ret, n);
+        return vec;
+    };
+
+    auto riff_hdr = read.operator()<RiffHeader>();
+    if (riff_hdr->riff_magic != RIFF_MAGIC)
+        return std::unexpected(WaveFileError_InvalidHeader);
+    if (riff_hdr->wav_magic != WAVE_MAGIC)
+        return std::unexpected(WaveFileError_InvalidHeader);
+    if (riff_hdr->file_size + 8 > data_size)
+        return std::unexpected(WaveFileError_InvalidHeader);
+
+    const FmtSection* fmt = nullptr;
+    bool has_data = false;
+    std::vector<u8> sample_data;
+
+    while (pos < data_size)
+    {
+        auto section = read.operator()<RiffSection>();
+        if (pos + section->size > data_size)
+            return std::unexpected(WaveFileError_InvalidHeader);
+
+        if (section->magic == FMT_MAGIC)
+        {
+            if (fmt != nullptr)
+                return std::unexpected(WaveFileError_DuplicateSections);
+            fmt = read.operator()<FmtSection>();
+        }
+        else if (section->magic == DATA_MAGIC)
+        {
+            if (sample_data.data() != nullptr)
+                return std::unexpected(WaveFileError_DuplicateSections);
+            sample_data = readVec.operator()<u8>(section->size);
+            has_data = true;
+        }
+        else
+        {
+            pos += section->size;
+        }
+    }
+
+    if (fmt == nullptr)
+        return std::unexpected(WaveFileError_MissingSection);
+    if (!has_data)
+        return std::unexpected(WaveFileError_MissingSection);
+
+    return Sound(std::move(sample_data), fmt->channels, fmt->bit_per_sample / 8,
+                 fmt->sample_rate, sample_data.size() / fmt->stride, 0,
+                 SoundTarget_Both);
 }
 
 std::vector<u8> Sound::toWave() const
