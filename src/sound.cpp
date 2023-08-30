@@ -1,6 +1,8 @@
 #include "sound.hpp"
+#include <SDL_audio.h>
 #include <cstdlib>
 #include <cstring>
+#include <fmt/format.h>
 #include <string_view>
 
 struct [[gnu::packed]] RiffHeader
@@ -48,6 +50,12 @@ static constexpr u32 RIFF_MAGIC = MAGIC("RIFF");
 static constexpr u32 FMT_MAGIC = MAGIC("fmt ");
 static constexpr u32 DATA_MAGIC = MAGIC("data");
 static constexpr u32 WAVE_MAGIC = MAGIC("WAVE");
+
+std::string Sound::formatName() const
+{
+    return fmt::format("{}ch {}hz {}bit", m_channels, m_sample_rate,
+                       m_byte_per_sample * 8);
+}
 
 float Sound::sampleNormalized(size_t idx, size_t channel) const
 {
@@ -139,75 +147,38 @@ std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
                  sample_loop, target);
 }
 
-std::expected<Sound, WaveFileError> Sound::fromWave(const void* data,
-                                                    size_t data_size)
+std::expected<Sound, WaveFileError>
+Sound::fromWave(const void* data, size_t data_size, SDL_AudioSpec* out_spec)
 {
-    if (data_size < sizeof(RiffHeader) + sizeof(RiffSection) +
-                        sizeof(FmtSection) + sizeof(RiffSection))
-        return std::unexpected(WaveFileError_FileTooSmall);
+    SDL_AudioSpec spec;
+    Uint8* audio_buf;
+    Uint32 audio_len;
 
-    size_t pos = 0;
-
-    auto read = [&pos, &data]<typename T>() -> T*
+    if (!SDL_LoadWAV_RW(SDL_RWFromConstMem(data, (int)data_size), false, &spec,
+                        &audio_buf, &audio_len))
     {
-        auto ret = reinterpret_cast<T*>(reinterpret_cast<intptr_t>(data) + pos);
-        pos += sizeof(T);
-        return ret;
-    };
-    auto readVec = [&pos, &data]<typename T>(size_t n) -> std::vector<T>
-    {
-        auto ret = reinterpret_cast<T*>(reinterpret_cast<intptr_t>(data) + pos);
-        pos += n;
-        std::vector<T> vec(n);
-        std::memcpy(vec.data(), ret, n);
-        return vec;
-    };
-
-    auto riff_hdr = read.operator()<RiffHeader>();
-    if (riff_hdr->riff_magic != RIFF_MAGIC)
-        return std::unexpected(WaveFileError_InvalidHeader);
-    if (riff_hdr->wav_magic != WAVE_MAGIC)
-        return std::unexpected(WaveFileError_InvalidHeader);
-    if (riff_hdr->file_size + 8 > data_size)
-        return std::unexpected(WaveFileError_InvalidHeader);
-
-    const FmtSection* fmt = nullptr;
-    bool has_data = false;
-    std::vector<u8> sample_data;
-
-    while (pos < data_size)
-    {
-        auto section = read.operator()<RiffSection>();
-        if (pos + section->size > data_size)
-            return std::unexpected(WaveFileError_InvalidHeader);
-
-        if (section->magic == FMT_MAGIC)
-        {
-            if (fmt != nullptr)
-                return std::unexpected(WaveFileError_DuplicateSections);
-            fmt = read.operator()<FmtSection>();
-        }
-        else if (section->magic == DATA_MAGIC)
-        {
-            if (sample_data.data() != nullptr)
-                return std::unexpected(WaveFileError_DuplicateSections);
-            sample_data = readVec.operator()<u8>(section->size);
-            has_data = true;
-        }
-        else
-        {
-            pos += section->size;
-        }
+        return std::unexpected(WaveFileError_LoadWaveFailed);
     }
 
-    if (fmt == nullptr)
-        return std::unexpected(WaveFileError_MissingSection);
-    if (!has_data)
-        return std::unexpected(WaveFileError_MissingSection);
+    if (out_spec)
+        *out_spec = spec;
 
-    return Sound(std::move(sample_data), fmt->channels, fmt->bit_per_sample / 8,
-                 fmt->sample_rate, sample_data.size() / fmt->stride, 0,
-                 SoundTarget_Both);
+    SDL_AudioCVT cvt;
+    SDL_BuildAudioCVT(&cvt, spec.format, spec.channels, spec.freq, AUDIO_S16, 2,
+                      44100);
+
+    std::vector<u8> sample_data(audio_len * cvt.len_mult);
+    cvt.buf = sample_data.data();
+    cvt.len = audio_len;
+    std::memcpy(sample_data.data(), audio_buf, audio_len);
+    SDL_FreeWAV(audio_buf);
+
+    SDL_ConvertAudio(&cvt);
+
+    sample_data.resize(cvt.len_cvt);
+
+    return Sound(std::move(sample_data), 2, 2, 44100,
+                 cvt.len_cvt / (2 * sizeof(u16)), 0, SoundTarget_Both);
 }
 
 std::vector<u8> Sound::toWave() const

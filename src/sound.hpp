@@ -1,6 +1,8 @@
 #pragma once
 
+#include <SDL_audio.h>
 #include <expected>
+#include <string>
 #include <vector>
 #include "types.hpp"
 
@@ -16,6 +18,8 @@ enum WaveFileError
     WaveFileError_InvalidHeader,
     WaveFileError_DuplicateSections,
     WaveFileError_MissingSection,
+    WaveFileError_UnsupportedFormat,
+    WaveFileError_LoadWaveFailed,
 };
 
 enum SoundTarget : u32
@@ -48,13 +52,14 @@ public:
                                                       size_t data_size);
     template<typename T>
     static std::expected<Sound, WaveFileError>
-    fromWave(const std::vector<T>& data)
+    fromWave(const std::vector<T>& data, SDL_AudioSpec* out_spec = nullptr)
     {
         return fromWave(reinterpret_cast<const void*>(data.data()),
-                        data.size() * sizeof(T));
+                        data.size() * sizeof(T), out_spec);
     }
-    static std::expected<Sound, WaveFileError> fromWave(const void* data,
-                                                        size_t data_size);
+    static std::expected<Sound, WaveFileError>
+    fromWave(const void* data, size_t data_size,
+             SDL_AudioSpec* out_spec = nullptr);
 
     template<typename T>
     const T* sampleData(size_t off) const
@@ -88,6 +93,8 @@ public:
     {
         return (float)sampleCount() / (float)sampleRate();
     }
+
+    std::string formatName() const;
 
     std::vector<u8> toWave() const;
 

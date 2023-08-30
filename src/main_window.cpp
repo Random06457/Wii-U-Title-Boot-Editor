@@ -104,22 +104,47 @@ void MainWindow::renderSound()
     if (ImGui::Button("Import"))
     {
         m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_Modal);
-        m_file_dialog.open(".wav",
-                           [this](const std::string& path)
-                           {
-                               auto wave = File::readAllBytes(path);
-                               auto new_sound = Sound::fromWave(wave);
-                               if (!new_sound)
-                               {
-                                   showError("Invalid or corrupted sound");
-                                   return;
-                               }
+        m_file_dialog.open(
+            ".wav",
+            [this](const std::string& path)
+            {
+                auto wave = File::readAllBytes(path);
+                SDL_AudioSpec spec;
+                auto new_sound = Sound::fromWave(wave, &spec);
+                if (!new_sound)
+                {
+                    showError("Invalid or corrupted sound");
+                    return;
+                }
 
-                               m_curr_meta->meta.sound() =
-                                   std::move(*new_sound);
+                if (spec.channels != 2 || spec.freq != 44100 ||
+                    spec.format != AUDIO_S16)
+                {
+                    auto fmt_str = [](SDL_AudioFormat fmt)
+                    {
+                        switch (fmt)
+                        {
+                            case AUDIO_U8: return "unsigned 8bit";
+                            case AUDIO_S8: return "signed 8bit";
+                            case AUDIO_U16: return "unsigned 16bit";
+                            case AUDIO_S16: return "signed 16bit";
+                            case AUDIO_S32: return "signed 32bit";
+                            case AUDIO_F32: return "float 32bit";
+                            default: return "Unkown";
+                        }
+                    };
+                    showError(fmt::format(
+                        "Warning: audio file is not in 2ch 44100hz signed 16bit"
+                        " format.\nConversion that may decrease quality will "
+                        "be performed.\nActual format: {}ch {}hz {}",
+                        spec.channels, spec.freq, fmt_str(spec.format)));
+                }
 
-                               m_player.setSound(&m_curr_meta->meta.sound());
-                           });
+                m_player.pause();
+                m_curr_meta->meta.sound() = std::move(*new_sound);
+
+                m_player.setSound(&m_curr_meta->meta.sound());
+            });
     }
     ImGui::SameLine();
     if (ImGui::Button("Export"))

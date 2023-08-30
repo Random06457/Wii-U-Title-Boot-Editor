@@ -68,7 +68,7 @@ void SoundPlayer::setSound(const Sound* sound)
 
     wanted.freq = (int)m_curr_sound->sampleRate();
     if (m_curr_sound->bitsPerSample() == 8)
-        wanted.format = AUDIO_S8;
+        wanted.format = AUDIO_U8;
     else if (m_curr_sound->bitsPerSample() == 16)
         wanted.format = AUDIO_S16;
     else
