@@ -29,19 +29,20 @@ public:
     Sound(Sound&& other) { *this = std::move(other); }
     Sound& operator=(Sound&&);
 
+    template<typename T>
     static std::expected<Sound, SoundError>
-    fromBtsnd(const std::vector<u8>& data)
+    fromBtsnd(const std::vector<T>& data)
     {
         return fromBtsnd(reinterpret_cast<const void*>(data.data()),
-                         data.size());
+                         data.size() * sizeof(T));
     }
     static std::expected<Sound, SoundError> fromBtsnd(const void* data,
                                                       size_t data_size);
-    static std::expected<Sound, SoundError>
-    fromWave(const std::vector<u8>& data)
+    template<typename T>
+    static std::expected<Sound, SoundError> fromWave(const std::vector<T>& data)
     {
         return fromWave(reinterpret_cast<const void*>(data.data()),
-                        data.size());
+                        data.size() * sizeof(T));
     }
     static std::expected<Sound, SoundError> fromWave(const void* data,
                                                      size_t data_size);
@@ -78,6 +79,8 @@ public:
     {
         return (float)sampleCount() / (float)sampleRate();
     }
+
+    std::vector<u8> toWave() const;
 
 private:
     std::vector<u8> m_sample_data;

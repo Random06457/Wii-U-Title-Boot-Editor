@@ -1,5 +1,7 @@
 #include "sound.hpp"
 #include <cstdlib>
+#include <cstring>
+#include <string_view>
 
 struct [[gnu::packed]] RiffHeader
 {
@@ -11,7 +13,7 @@ struct [[gnu::packed]] RiffHeader
 struct [[gnu::packed]] RiffSection
 {
     u32 magic;
-    u32 length;
+    u32 size;
 };
 
 struct [[gnu::packed]] FmtSection
@@ -22,12 +24,30 @@ struct [[gnu::packed]] FmtSection
     u32 second_size; // sample_rate * byte_per_sampel * channels
     u16 stride;      // byte_per_sample * channels
     u16 bit_per_sample;
-    u32 data_magic;
-    u8 data[];
 };
 
-static constexpr u32 FMT_HEADER = 0x20746D66;
-static constexpr u32 DATA_HEADER = 0x61746164;
+static constexpr u16 WAVE_FORMAT_PCM = 1;
+
+#ifndef __cpp_lib_constexpr_string_view
+#error "constexpr string_view unsupported"
+#endif
+
+static constexpr u32 MAGIC(char a, char b, char c, char d)
+{
+    if constexpr (std::endian::native == std::endian::little)
+        return d << 24 | c << 16 | b << 8 | a;
+    else
+        return a << 24 | b << 16 | c << 8 | d;
+}
+static constexpr u32 MAGIC(std::string_view s)
+{
+    return MAGIC(s[0], s[1], s[2], s[3]);
+}
+
+static constexpr u32 RIFF_MAGIC = MAGIC("RIFF");
+static constexpr u32 FMT_MAGIC = MAGIC("fmt ");
+static constexpr u32 DATA_MAGIC = MAGIC("data");
+static constexpr u32 WAVE_MAGIC = MAGIC("WAVE");
 
 float Sound::sampleNormalized(size_t idx, size_t channel) const
 {
@@ -122,4 +142,65 @@ std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
 std::expected<Sound, SoundError> Sound::fromWave(const void*, size_t)
 {
     return std::unexpected(SoundError_InvalidOrUnsupportedWaveFile);
+}
+
+std::vector<u8> Sound::toWave() const
+{
+    size_t pos = 0;
+    std::vector<u8> ret;
+
+    ret.reserve(sizeof(RiffHeader) + sizeof(RiffSection) + sizeof(FmtSection) +
+                sizeof(RiffSection) + sampleDataSize());
+
+    auto write = [&pos, &ret]<typename T>(const T& x)
+    {
+        size_t off = ret.size();
+        ret.resize(off + sizeof(T));
+        std::memcpy(ret.data() + off, &x, sizeof(T));
+    };
+
+    auto writeVec = [&pos, &ret]<typename T>(const std::vector<T>& x)
+    {
+        size_t off = ret.size();
+        ret.resize(off + x.size() * sizeof(T));
+        std::memcpy(ret.data() + off, x.data(), x.size() * sizeof(T));
+    };
+
+    auto getPtr = [&ret]<typename T>(size_t off) -> T*
+    { return reinterpret_cast<T*>(ret.data() + off); };
+
+    size_t riff_hdr_off = pos;
+
+    // riff header
+    write(RiffHeader{
+        .riff_magic = RIFF_MAGIC,
+        .file_size = 0,
+        .wav_magic = WAVE_MAGIC,
+    });
+
+    // fmt header
+    write(RiffSection{ .magic = FMT_MAGIC, .size = sizeof(FmtSection) });
+
+    // fmt section
+    write(FmtSection{
+        .format = WAVE_FORMAT_PCM,
+        .channels = 2,
+        .sample_rate = static_cast<u32>(sampleRate()),
+        .second_size = static_cast<u32>(sampleStride() * sampleRate()),
+        .stride = static_cast<u16>(sampleStride()),
+        .bit_per_sample = static_cast<u16>(bitsPerSample()),
+    });
+
+    // data header
+    write(RiffSection{ .magic = DATA_MAGIC,
+                       .size = static_cast<u32>(sampleDataSize()) });
+
+    // data section
+    writeVec(m_sample_data);
+
+    // write file size
+    getPtr.operator()<RiffHeader>(riff_hdr_off)->file_size =
+        static_cast<u32>(pos - 8);
+
+    return ret;
 }

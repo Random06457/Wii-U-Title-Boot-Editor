@@ -102,6 +102,21 @@ void MainWindow::renderSound()
                          (int)sample_count, 0, nullptr, -1, 1,
                          { 0.0F, 100.0f });
     }
+
+    if (ImGui::Button("Export To WAVE"))
+    {
+        m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_ConfirmOverwrite |
+                                     ImGuiFileDialogFlags_Modal);
+        m_file_dialog.open(".wav",
+                           [&player](const std::string& path)
+                           {
+                               auto wave = player.sound().toWave();
+                               File::writeAllBytes(
+                                   path,
+                                   reinterpret_cast<const void*>(wave.data()),
+                                   wave.size());
+                           });
+    }
 }
 
 static ImVec2 fitImage(ImVec2 src, ImVec2 dst)
