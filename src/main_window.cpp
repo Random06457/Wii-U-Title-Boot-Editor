@@ -20,7 +20,6 @@ MainWindow::Selection::Selection(TitleMeta& title_meta) :
     tv_tex(meta.tvTex()),
     logo_tex(meta.logoTex()),
     icon_tex(meta.iconTex()),
-    player(&meta.sound()),
     target_idx(static_cast<int>(meta.sound().target())),
     loop_sample(static_cast<int>(meta.sound().loopSample()))
 {
@@ -28,8 +27,6 @@ MainWindow::Selection::Selection(TitleMeta& title_meta) :
 
 void MainWindow::renderSound()
 {
-    auto& player = m_curr_meta->player;
-
     ImGui::Text("Boot Sound");
     ImGui::Spacing();
     const char* modes[] = { "TV", "DRC", "Both" };
@@ -39,51 +36,51 @@ void MainWindow::renderSound()
 
     ImGui::Spacing();
 
-    if (player.isPlaying())
+    if (m_player.isPlaying())
     {
         if (ImGui::Button("Pause"))
         {
-            player.pause();
+            m_player.pause();
         }
     }
     else
     {
         if (ImGui::Button("Play"))
         {
-            if (player.getCurrSample() == player.sound().sampleCount())
+            if (m_player.getCurrSample() == m_player.sound().sampleCount())
             {
-                player.setCurrSample(0);
+                m_player.setCurrSample(0);
             }
-            player.play();
+            m_player.play();
         }
     }
     ImGui::SameLine();
     float int_part;
-    ImGui::Text("%02d:%02d:%02d / %02d:%02d:%02d",
-                (int)player.getCurrTime() / 60, (int)player.getCurrTime() % 60,
-                (int)(std::modf(player.getCurrTime(), &int_part) * 100),
-                (int)player.sound().getDuration() / 60,
-                (int)player.sound().getDuration() % 60,
-                (int)(std::modf(player.sound().getDuration(), &int_part)) *
-                    100);
+    ImGui::Text(
+        "%02d:%02d:%02d / %02d:%02d:%02d", (int)m_player.getCurrTime() / 60,
+        (int)m_player.getCurrTime() % 60,
+        (int)(std::modf(m_player.getCurrTime(), &int_part) * 100),
+        (int)m_player.sound().getDuration() / 60,
+        (int)m_player.sound().getDuration() % 60,
+        (int)(std::modf(m_player.sound().getDuration(), &int_part)) * 100);
 
-    float player_pos = player.getCurrTime();
+    float player_pos = m_player.getCurrTime();
     if (ImGui::SliderFloat("## player time", &player_pos, 0.0f,
-                           player.sound().getDuration(), "",
+                           m_player.sound().getDuration(), "",
                            ImGuiSliderFlags_AlwaysClamp))
     {
-        player.setCurrTime(player_pos);
+        m_player.setCurrTime(player_pos);
     }
 
-    for (size_t i = 0; i < player.sound().channels(); i++)
+    for (size_t i = 0; i < m_player.sound().channels(); i++)
     {
-        size_t curr_sample = player.getCurrSample();
+        size_t curr_sample = m_player.getCurrSample();
         struct
         {
             SoundPlayer* x;
             size_t channel;
             size_t idx_off;
-        } ctx0 = { &player, i, curr_sample };
+        } ctx0 = { &m_player, i, curr_sample };
 
         auto getter = [](void* data, int idx) -> float
         {
@@ -93,10 +90,11 @@ void MainWindow::renderSound()
             return ctx->x->sound().sampleNormalized(idx, ctx->channel);
         };
 
-        size_t max_sample_count = player.sound().sampleCount() - curr_sample;
-        size_t sample_count = std::min(player.sound().sampleRate() *
-                                           player.sound().bytesPerSample() / 10,
-                                       max_sample_count);
+        size_t max_sample_count = m_player.sound().sampleCount() - curr_sample;
+        size_t sample_count =
+            std::min(m_player.sound().sampleRate() *
+                         m_player.sound().bytesPerSample() / 10,
+                     max_sample_count);
 
         ImGui::PlotLines(fmt::format("Channel {}", i).c_str(), getter, &ctx0,
                          (int)sample_count, 0, nullptr, -1, 1,
@@ -106,20 +104,22 @@ void MainWindow::renderSound()
     if (ImGui::Button("Import"))
     {
         m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_Modal);
-        m_file_dialog.open(
-            ".wav",
-            [this](const std::string& path)
-            {
-                auto wave = File::readAllBytes(path);
-                auto new_sound = Sound::fromWave(wave);
-                if (!new_sound)
-                {
-                    showError("Invalid or corrupted sound");
-                    return;
-                }
-                m_curr_meta->meta.sound() = std::move(*new_sound);
-                m_curr_meta->player.setSound(&m_curr_meta->meta.sound());
-            });
+        m_file_dialog.open(".wav",
+                           [this](const std::string& path)
+                           {
+                               auto wave = File::readAllBytes(path);
+                               auto new_sound = Sound::fromWave(wave);
+                               if (!new_sound)
+                               {
+                                   showError("Invalid or corrupted sound");
+                                   return;
+                               }
+
+                               m_curr_meta->meta.sound() =
+                                   std::move(*new_sound);
+
+                               m_player.setSound(&m_curr_meta->meta.sound());
+                           });
     }
     ImGui::SameLine();
     if (ImGui::Button("Export"))
@@ -127,9 +127,9 @@ void MainWindow::renderSound()
         m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_ConfirmOverwrite |
                                      ImGuiFileDialogFlags_Modal);
         m_file_dialog.open(".wav",
-                           [&player](const std::string& path)
+                           [this](const std::string& path)
                            {
-                               auto wave = player.sound().toWave();
+                               auto wave = m_player.sound().toWave();
                                File::writeAllBytes(
                                    path,
                                    reinterpret_cast<const void*>(wave.data()),
@@ -338,6 +338,7 @@ void MainWindow::renderTitleList()
                     }
 
                     m_curr_meta = std::make_unique<Selection>(**meta);
+                    m_player.setSound(&meta.value()->sound());
                 }
                 m_selected_idx = i;
             }

@@ -19,7 +19,6 @@ private:
         GlImage tv_tex;
         GlImage logo_tex;
         GlImage icon_tex;
-        SoundPlayer player;
 
         int target_idx;
         int loop_sample;
@@ -50,4 +49,5 @@ private:
     std::function<void()> m_popup_func = nullptr;
     bool m_open_popup_req = false;
     int m_title_type = TitleType_MLC;
+    SoundPlayer m_player;
 };

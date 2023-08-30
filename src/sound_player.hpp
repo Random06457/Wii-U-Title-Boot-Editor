@@ -7,6 +7,9 @@
 class SoundPlayer
 {
 public:
+    SoundPlayer() : m_curr_sound(nullptr), m_curr_buffered(0), m_audio_device(0)
+    {
+    }
     SoundPlayer(const Sound* sound);
     ~SoundPlayer();
 
