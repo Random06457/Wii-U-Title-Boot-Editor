@@ -1,4 +1,9 @@
-project('ImGuiFileDialog', 'cpp')
+project('ImGuiFileDialog', 'cpp',
+    default_options : [
+        'warning_level=0',
+        'werror=false',
+    ],
+)
 
 src = [
     'ImGuiFileDialog.cpp',

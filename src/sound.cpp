@@ -37,9 +37,9 @@ static constexpr u16 WAVE_FORMAT_PCM = 1;
 static constexpr u32 MAGIC(char a, char b, char c, char d)
 {
     if constexpr (std::endian::native == std::endian::little)
-        return d << 24 | c << 16 | b << 8 | a;
+        return (u32)(d << 24 | c << 16 | b << 8 | a);
     else
-        return a << 24 | b << 16 | c << 8 | d;
+        return (u32)(a << 24 | b << 16 | c << 8 | d);
 }
 static constexpr u32 MAGIC(std::string_view s)
 {
@@ -104,8 +104,7 @@ Sound& Sound::operator=(Sound&& other)
     return *this;
 }
 
-std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
-                                                  size_t data_size)
+Expected<Sound, SoundError> Sound::fromBtsnd(const void* data, size_t data_size)
 {
     auto read32 = [&data](size_t off)
     {
@@ -119,7 +118,7 @@ std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
     };
 
     if (data_size < 8)
-        return std::unexpected(SoundError_InvalidBtsndFile);
+        return Unexpected(SoundError_InvalidBtsndFile);
 
     auto target = static_cast<SoundTarget>(read32(0));
     size_t sample_loop = read32(4);
@@ -127,7 +126,7 @@ std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
     const u8* samples = reinterpret_cast<const u8*>(data) + 8;
 
     if (target > SoundTarget_Both)
-        return std::unexpected(SoundError_InvalidBtsndFile);
+        return Unexpected(SoundError_InvalidBtsndFile);
 
     auto vec = std::vector<u8>(samples, samples + data_size - 8);
 
@@ -147,7 +146,7 @@ std::expected<Sound, SoundError> Sound::fromBtsnd(const void* data,
                  sample_loop, target);
 }
 
-std::expected<Sound, WaveFileError>
+Expected<Sound, WaveFileError>
 Sound::fromWave(const void* data, size_t data_size, SDL_AudioSpec* out_spec)
 {
     SDL_AudioSpec spec;
@@ -157,7 +156,7 @@ Sound::fromWave(const void* data, size_t data_size, SDL_AudioSpec* out_spec)
     if (!SDL_LoadWAV_RW(SDL_RWFromConstMem(data, (int)data_size), false, &spec,
                         &audio_buf, &audio_len))
     {
-        return std::unexpected(WaveFileError_LoadWaveFailed);
+        return Unexpected(WaveFileError_LoadWaveFailed);
     }
 
     if (out_spec)
@@ -167,36 +166,35 @@ Sound::fromWave(const void* data, size_t data_size, SDL_AudioSpec* out_spec)
     SDL_BuildAudioCVT(&cvt, spec.format, spec.channels, spec.freq, AUDIO_S16, 2,
                       44100);
 
-    std::vector<u8> sample_data(audio_len * cvt.len_mult);
+    std::vector<u8> sample_data((size_t)(audio_len * (long)cvt.len_mult));
     cvt.buf = sample_data.data();
-    cvt.len = audio_len;
+    cvt.len = (int)audio_len;
     std::memcpy(sample_data.data(), audio_buf, audio_len);
     SDL_FreeWAV(audio_buf);
 
     SDL_ConvertAudio(&cvt);
 
-    sample_data.resize(cvt.len_cvt);
+    sample_data.resize((size_t)cvt.len_cvt);
 
     return Sound(std::move(sample_data), 2, 2, 44100,
-                 cvt.len_cvt / (2 * sizeof(u16)), 0, SoundTarget_Both);
+                 (size_t)cvt.len_cvt / (2 * sizeof(u16)), 0, SoundTarget_Both);
 }
 
 std::vector<u8> Sound::toWave() const
 {
-    size_t pos = 0;
     std::vector<u8> ret;
 
     ret.reserve(sizeof(RiffHeader) + sizeof(RiffSection) + sizeof(FmtSection) +
                 sizeof(RiffSection) + sampleDataSize());
 
-    auto write = [&pos, &ret]<typename T>(const T& x)
+    auto write = [&ret]<typename T>(const T& x)
     {
         size_t off = ret.size();
         ret.resize(off + sizeof(T));
         std::memcpy(ret.data() + off, &x, sizeof(T));
     };
 
-    auto writeVec = [&pos, &ret]<typename T>(const std::vector<T>& x)
+    auto writeVec = [&ret]<typename T>(const std::vector<T>& x)
     {
         size_t off = ret.size();
         ret.resize(off + x.size() * sizeof(T));
@@ -206,7 +204,7 @@ std::vector<u8> Sound::toWave() const
     auto getPtr = [&ret]<typename T>(size_t off) -> T*
     { return reinterpret_cast<T*>(ret.data() + off); };
 
-    size_t riff_hdr_off = pos;
+    size_t riff_hdr_off = ret.size();
 
     // riff header
     write(RiffHeader{
@@ -237,7 +235,7 @@ std::vector<u8> Sound::toWave() const
 
     // write file size
     getPtr.operator()<RiffHeader>(riff_hdr_off)->file_size =
-        static_cast<u32>(pos - 8);
+        static_cast<u32>(ret.size() - 8);
 
     return ret;
 }

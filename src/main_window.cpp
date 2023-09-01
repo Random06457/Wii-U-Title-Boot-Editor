@@ -87,7 +87,7 @@ void MainWindow::renderSound()
             auto ctx = reinterpret_cast<decltype(ctx0)*>(data);
 
             idx += static_cast<int>(ctx->idx_off);
-            return ctx->x->sound().sampleNormalized(idx, ctx->channel);
+            return ctx->x->sound().sampleNormalized((size_t)idx, ctx->channel);
         };
 
         size_t max_sample_count = m_player.sound().sampleCount() - curr_sample;
@@ -299,8 +299,8 @@ static bool isValidIp(const char* ip_cstr)
 void MainWindow::renderTitleList()
 {
     const char* labels[]{
-        [TitleType_USB] = "USB",
-        [TitleType_MLC] = "MLC",
+        "USB",
+        "MLC",
     };
     ImGui::BeginChild("Title Selector", ImVec2(200, 0), true);
 

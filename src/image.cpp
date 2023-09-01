@@ -33,8 +33,7 @@ Image& Image::operator=(Image&& img)
     return *this;
 }
 
-std::expected<Image, ImageError> Image::fromStb(const void* data,
-                                                size_t data_size)
+Expected<Image, ImageError> Image::fromStb(const void* data, size_t data_size)
 {
     int w;
     int h;
@@ -42,7 +41,7 @@ std::expected<Image, ImageError> Image::fromStb(const void* data,
         stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(data),
                               static_cast<int>(data_size), &w, &h, nullptr, 4);
     if (!stbi_data)
-        return std::unexpected(ImageError_LoadingStbiImageFailed);
+        return Unexpected(ImageError_LoadingStbiImageFailed);
 
     return Image(reinterpret_cast<u32*>(stbi_data), static_cast<size_t>(w),
                  static_cast<size_t>(h),
@@ -50,8 +49,8 @@ std::expected<Image, ImageError> Image::fromStb(const void* data,
                  { stbi_image_free(reinterpret_cast<void*>(img)); });
 }
 
-std::expected<Image, ImageError> Image::fromWiiU(const void* tga_data,
-                                                 size_t data_size)
+Expected<Image, ImageError> Image::fromWiiU(const void* tga_data,
+                                            size_t data_size)
 {
     struct [[gnu::packed]] TgaHeader
     {
@@ -70,39 +69,39 @@ std::expected<Image, ImageError> Image::fromWiiU(const void* tga_data,
     static_assert(sizeof(TgaHeader) == 18);
 
     if (data_size < sizeof(TgaHeader))
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
 
     auto hdr = reinterpret_cast<const TgaHeader*>(tga_data);
 
     if (data_size < sizeof(TgaHeader) + hdr->width * hdr->height * hdr->bpp / 8)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
 
     if (hdr->id_length != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->color_map_type != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->image_type != 2)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->color_map_spec[0] != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->color_map_spec[1] != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->color_map_spec[2] != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->color_map_spec[3] != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->color_map_spec[4] != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
 
     if (hdr->x != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->y != 0)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if (hdr->bpp != 32 && hdr->bpp != 24)
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
     if ((hdr->bpp == 32 && hdr->image_descriptor != 8) ||
         (hdr->bpp == 24 && hdr->image_descriptor != 0))
-        return std::unexpected(ImageError_InvalidOrUnsupportedTGA);
+        return Unexpected(ImageError_InvalidOrUnsupportedTGA);
 
     u32* data = new u32[hdr->width * hdr->height];
 
@@ -118,7 +117,7 @@ std::expected<Image, ImageError> Image::fromWiiU(const void* tga_data,
             u8 a = hdr->bpp == 32 ? hdr->data[src_off + x * hdr->bpp / 8 + 3]
                                   : 0xFF;
 
-            data[dst_off + x] = b | g << 8 | r << 16 | a << 24;
+            data[dst_off + x] = (u32)(b | g << 8 | r << 16 | a << 24);
         }
     }
 

@@ -3,6 +3,7 @@
 #include <string>
 #include <unordered_map>
 #include "title_meta.hpp"
+#include "utils.hpp"
 #define LINUX
 #include <FTP/FTPClient.h>
 
@@ -51,7 +52,7 @@ public:
     TitleMgr();
     ~TitleMgr();
 
-    std::expected<void, WiiuConnexionError> connect(const std::string& ip);
+    Expected<void, WiiuConnexionError> connect(const std::string& ip);
 
     void cleanup()
     {
@@ -71,9 +72,9 @@ public:
     const std::vector<TitleId>& getTitles() { return m_titles; }
 
     auto getTitle(const TitleId& title_id)
-        -> std::expected<TitleMeta*,
-                         std::variant<WiiuConnexionError, ImageError,
-                                      SoundError, MetaDirMissingFileError>>;
+        -> Expected<TitleMeta*,
+                    std::variant<WiiuConnexionError, ImageError, SoundError,
+                                 MetaDirMissingFileError>>;
 
 private:
     std::vector<std::string> ls(const std::filesystem::path& dir);

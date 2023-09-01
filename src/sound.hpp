@@ -1,10 +1,10 @@
 #pragma once
 
 #include <SDL_audio.h>
-#include <expected>
 #include <string>
 #include <vector>
 #include "types.hpp"
+#include "utils.hpp"
 
 enum SoundError
 {
@@ -42,22 +42,21 @@ public:
     Sound& operator=(Sound&&);
 
     template<typename T>
-    static std::expected<Sound, SoundError>
-    fromBtsnd(const std::vector<T>& data)
+    static Expected<Sound, SoundError> fromBtsnd(const std::vector<T>& data)
     {
         return fromBtsnd(reinterpret_cast<const void*>(data.data()),
                          data.size() * sizeof(T));
     }
-    static std::expected<Sound, SoundError> fromBtsnd(const void* data,
-                                                      size_t data_size);
+    static Expected<Sound, SoundError> fromBtsnd(const void* data,
+                                                 size_t data_size);
     template<typename T>
-    static std::expected<Sound, WaveFileError>
+    static Expected<Sound, WaveFileError>
     fromWave(const std::vector<T>& data, SDL_AudioSpec* out_spec = nullptr)
     {
         return fromWave(reinterpret_cast<const void*>(data.data()),
                         data.size() * sizeof(T), out_spec);
     }
-    static std::expected<Sound, WaveFileError>
+    static Expected<Sound, WaveFileError>
     fromWave(const void* data, size_t data_size,
              SDL_AudioSpec* out_spec = nullptr);
 

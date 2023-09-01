@@ -1,6 +1,20 @@
 #pragma once
 
+#if __has_include(<expected>)
 #include <expected>
+#ifdef __cpp_lib_expected
+#define Expected std::expected
+#define Unexpected std::unexpected
+#else
+#include <tl/expected.hpp>
+#define Expected tl::expected
+#define Unexpected tl::unexpected
+#endif
+#else
+#include <tl/expected.hpp>
+#define Expected tl::expected
+#define Unexpected tl::unexpected
+#endif
 #include <variant>
 
 // https://en.cppreference.com/w/cpp/utility/variant/visit
@@ -38,7 +52,7 @@ auto variant_cast(const std::variant<Args...>& v) -> variant_cast_proxy<Args...>
         auto err = __VA_ARGS__;                                                \
         if (!err)                                                              \
         {                                                                      \
-            return std::unexpected(variant_cast(err.error()));                 \
+            return Unexpected(variant_cast(err.error()));                      \
         }                                                                      \
         std::move(err.value());                                                \
     })

@@ -34,7 +34,7 @@ std::vector<u8> File::readAllBytes(const std::filesystem::path& path)
     std::streampos file_size = fs.tellg();
     fs.seekg(0, std::ios::beg);
 
-    std::vector<u8> ret(file_size);
+    std::vector<u8> ret(static_cast<size_t>(file_size));
     fs.read(reinterpret_cast<char*>(ret.data()), file_size);
 
     return ret;
@@ -49,7 +49,8 @@ void File::writeAllBytes(const std::filesystem::path& path, const void* data,
     if (!fs.is_open())
         std::abort();
 
-    fs.write(reinterpret_cast<const char*>(data), size);
+    fs.write(reinterpret_cast<const char*>(data),
+             static_cast<std::streamsize>(size));
 }
 
 void Directory::create(const std::filesystem::path& path)

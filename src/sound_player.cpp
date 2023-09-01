@@ -54,10 +54,10 @@ void SoundPlayer::setSound(const Sound* sound)
         auto x = reinterpret_cast<SoundPlayer*>(udata);
 
         size_t rest = x->sound().sampleDataSize() - x->m_curr_buffered;
-        size_t to_copy = std::min<size_t>(len, rest);
+        size_t to_copy = std::min<size_t>(static_cast<size_t>(len), rest);
         memcpy(stream, x->sound().sampleData<Uint8>(x->m_curr_buffered),
                to_copy);
-        memset(stream + to_copy, 0, len - to_copy);
+        memset(stream + to_copy, 0, static_cast<size_t>(len) - to_copy);
         x->m_curr_buffered += to_copy;
 
         if (rest == 0)

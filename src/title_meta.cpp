@@ -25,8 +25,9 @@ TitleMeta& TitleMeta::operator=(TitleMeta&& other)
     return *this;
 }
 
-auto TitleMeta::fromDir(const std::filesystem::path& path) -> std::expected<
-    TitleMeta, std::variant<ImageError, SoundError, MetaDirMissingFileError>>
+auto TitleMeta::fromDir(const std::filesystem::path& path)
+    -> Expected<TitleMeta,
+                std::variant<ImageError, SoundError, MetaDirMissingFileError>>
 {
     auto drc_tex_path = path / "bootDrcTex.tga";
     auto tv_tex_path = path / "bootTvTex.tga";
@@ -35,35 +36,35 @@ auto TitleMeta::fromDir(const std::filesystem::path& path) -> std::expected<
     auto boot_sound_path = path / "bootSound.btsnd";
 
     if (!File::exists(drc_tex_path))
-        return std::unexpected(MetaDirMissingFileError{ "bootDrcTex.tga" });
+        return Unexpected(MetaDirMissingFileError{ "bootDrcTex.tga" });
     if (!File::exists(tv_tex_path))
-        return std::unexpected(MetaDirMissingFileError{ "bootTvTex.tga" });
+        return Unexpected(MetaDirMissingFileError{ "bootTvTex.tga" });
     if (!File::exists(logo_tex_path))
-        return std::unexpected(MetaDirMissingFileError{ "bootLogoTex.tga" });
+        return Unexpected(MetaDirMissingFileError{ "bootLogoTex.tga" });
     if (!File::exists(icon_tex_path))
-        return std::unexpected(MetaDirMissingFileError{ "iconTex.tga" });
+        return Unexpected(MetaDirMissingFileError{ "iconTex.tga" });
     if (!File::exists(boot_sound_path))
-        return std::unexpected(MetaDirMissingFileError{ "bootSound.btsnd" });
+        return Unexpected(MetaDirMissingFileError{ "bootSound.btsnd" });
 
     auto drc_tex = Image::fromWiiU(File::readAllBytes(drc_tex_path));
     if (!drc_tex)
-        return std::unexpected(drc_tex.error());
+        return Unexpected(drc_tex.error());
 
     auto tv_tex = Image::fromWiiU(File::readAllBytes(tv_tex_path));
     if (!tv_tex)
-        return std::unexpected(tv_tex.error());
+        return Unexpected(tv_tex.error());
 
     auto logo_tex = Image::fromWiiU(File::readAllBytes(logo_tex_path));
     if (!logo_tex)
-        return std::unexpected(logo_tex.error());
+        return Unexpected(logo_tex.error());
 
     auto icon_tex = Image::fromWiiU(File::readAllBytes(icon_tex_path));
     if (!icon_tex)
-        return std::unexpected(icon_tex.error());
+        return Unexpected(icon_tex.error());
 
     auto boot_sound = Sound::fromBtsnd(File::readAllBytes(boot_sound_path));
     if (!boot_sound)
-        return std::unexpected(boot_sound.error());
+        return Unexpected(boot_sound.error());
 
     return TitleMeta(std::move(*drc_tex), std::move(*tv_tex),
                      std::move(*logo_tex), std::move(*icon_tex),

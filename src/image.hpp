@@ -1,10 +1,10 @@
 #pragma once
 
-#include <expected>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include "types.hpp"
+#include "utils.hpp"
 
 enum ImageError
 {
@@ -26,20 +26,19 @@ public:
     Image& operator=(const Image& img);
     Image& operator=(Image&& img);
 
-    static std::expected<Image, ImageError> fromStb(const std::vector<u8>& data)
+    static Expected<Image, ImageError> fromStb(const std::vector<u8>& data)
     {
         return fromStb(reinterpret_cast<const void*>(data.data()), data.size());
     }
-    static std::expected<Image, ImageError> fromStb(const void* data,
-                                                    size_t data_size);
-    static std::expected<Image, ImageError>
-    fromWiiU(const std::vector<u8>& data)
+    static Expected<Image, ImageError> fromStb(const void* data,
+                                               size_t data_size);
+    static Expected<Image, ImageError> fromWiiU(const std::vector<u8>& data)
     {
         return fromWiiU(reinterpret_cast<const void*>(data.data()),
                         data.size());
     }
-    static std::expected<Image, ImageError> fromWiiU(const void* data,
-                                                     size_t data_size);
+    static Expected<Image, ImageError> fromWiiU(const void* data,
+                                                size_t data_size);
 
     bool saveAsPng(const std::filesystem::path& path) const;
 

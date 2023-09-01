@@ -1,11 +1,11 @@
 #pragma once
 
-#include <expected>
 #include <filesystem>
 #include <variant>
 #include <vector>
 #include "image.hpp"
 #include "sound.hpp"
+#include "utils.hpp"
 
 struct MetaDirMissingFileError
 {
@@ -24,8 +24,8 @@ public:
     TitleMeta& operator=(TitleMeta&& other);
 
     static auto fromDir(const std::filesystem::path& path)
-        -> std::expected<TitleMeta, std::variant<ImageError, SoundError,
-                                                 MetaDirMissingFileError>>;
+        -> Expected<TitleMeta, std::variant<ImageError, SoundError,
+                                            MetaDirMissingFileError>>;
 
     const Image& drcTex() const { return m_drc_tex; }
     const Image& tvTex() const { return m_tv_tex; }

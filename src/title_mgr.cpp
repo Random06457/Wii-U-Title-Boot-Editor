@@ -49,7 +49,7 @@ std::vector<std::string> TitleMgr::ls(const std::filesystem::path& dir)
     return splitLs(ret);
 }
 
-std::expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
+Expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
 {
     m_state = State_Connected;
     m_cache.clear();
@@ -60,7 +60,7 @@ std::expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
                            embeddedmz::CFTPClient::FTP_PROTOCOL::FTP,
                            embeddedmz::CFTPClient::ENABLE_LOG))
     {
-        return std::unexpected(WiiuConnexionError(m_error));
+        return Unexpected(WiiuConnexionError{ m_error });
     }
 
     // fetch titles
@@ -90,9 +90,8 @@ std::expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
 }
 
 auto TitleMgr::getTitle(const TitleId& title_id)
-    -> std::expected<TitleMeta*,
-                     std::variant<WiiuConnexionError, ImageError, SoundError,
-                                  MetaDirMissingFileError>>
+    -> Expected<TitleMeta*, std::variant<WiiuConnexionError, ImageError,
+                                         SoundError, MetaDirMissingFileError>>
 {
     assert(m_state == State_Connected);
 
@@ -112,16 +111,16 @@ auto TitleMgr::getTitle(const TitleId& title_id)
     ({                                                                         \
         std::vector<char> buff;                                                \
         CURLcode curl_ret;                                                     \
-        if (!m_ftp.DownloadFile(path / name, buff, curl_ret))                  \
+        if (!m_ftp.DownloadFile((path / name).string(), buff, curl_ret))       \
         {                                                                      \
             if (curl_ret == CURLE_REMOTE_FILE_NOT_FOUND)                       \
-                return std::unexpected(MetaDirMissingFileError(name));         \
-            return std::unexpected(WiiuConnexionError(m_error));               \
+                return Unexpected(MetaDirMissingFileError{ name });            \
+            return Unexpected(WiiuConnexionError{ m_error });                  \
         }                                                                      \
         auto ret = parse_func(reinterpret_cast<const void*>(buff.data()),      \
                               buff.size());                                    \
         if (!ret)                                                              \
-            return std::unexpected(ret.error());                               \
+            return Unexpected(ret.error());                                    \
         std::move(ret.value());                                                \
     })
 
