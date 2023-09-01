@@ -375,57 +375,84 @@ void MainWindow::renderTitleList()
 
 void MainWindow::renderHeader()
 {
-    ImGui::BeginChild("Wii U Connexion", { 0, 20 });
-
-    ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 200 / 2);
-    ImGui::SetNextItemWidth(150);
-
-    bool old_valid = m_is_ip_valid;
-    if (!old_valid)
-        ImGui::PushStyleColor(ImGuiCol_Text, { 255, 0, 0, 255 });
-
-    ImGui::BeginDisabled(m_title_mgr.connected());
-    if (ImGui::InputText("##IP", m_ip, sizeof(m_ip)))
+    if (ImGui::BeginMenuBar())
     {
-        m_is_ip_valid = isValidIp(m_ip);
-    }
-    ImGui::EndDisabled();
-
-    ImGui::SameLine();
-
-    if (m_title_mgr.connected())
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, { 0, 255, 0, 255 });
-        ImGui::Text("Connected");
-        ImGui::PopStyleColor();
-    }
-    else if (m_title_mgr.connecting())
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, { 255, 255, 0, 255 });
-        ImGui::Text("Connecting...");
-        ImGui::PopStyleColor();
-    }
-    else if (old_valid)
-    {
-        if (ImGui::Button("Connect"))
+        if (ImGui::BeginMenu("Wii U"))
         {
-            auto res = m_title_mgr.connect(m_ip);
-            if (!res)
+            ImGui::Text("IP");
+
+            bool old_valid = m_is_ip_valid;
+            if (!old_valid)
+                ImGui::PushStyleColor(ImGuiCol_Text, { 255, 0, 0, 255 });
+
+            ImGui::BeginDisabled(m_title_mgr.connected());
+            if (ImGui::InputText("##IP", m_ip, sizeof(m_ip)))
             {
-                showError(res.error().error);
-                m_title_mgr.cleanup();
+                m_is_ip_valid = isValidIp(m_ip);
             }
+            ImGui::EndDisabled();
+
+            ImGui::SameLine();
+
+            if (m_title_mgr.connected())
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, { 0, 255, 0, 255 });
+                ImGui::Text("Connected");
+                ImGui::PopStyleColor();
+            }
+            else if (m_title_mgr.connecting())
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, { 255, 255, 0, 255 });
+                ImGui::Text("Connecting...");
+                ImGui::PopStyleColor();
+            }
+            else if (old_valid)
+            {
+                if (ImGui::Button("Connect"))
+                {
+                    auto res = m_title_mgr.connect(m_ip);
+                    if (!res)
+                    {
+                        showError(res.error().error);
+                        m_title_mgr.cleanup();
+                    }
+                }
+            }
+            else
+            {
+                ImGui::Text("Invalid IP");
+            }
+
+            if (!old_valid)
+                ImGui::PopStyleColor();
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::BeginDisabled(!m_title_mgr.connected());
+
+            if (ImGui::MenuItem("Backup Wii U Data"))
+            {
+                m_file_dialog.setDialogFlags(
+                    ImGuiFileDialogFlags_Modal |
+                    ImGuiFileDialogFlags_ConfirmOverwrite);
+                m_file_dialog.open(".zip", [this](const std::string& path)
+                                   { m_title_mgr.backupTitles(path); });
+            }
+            if (ImGui::MenuItem("Restore Backup Data"))
+            {
+                m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_Modal);
+                m_file_dialog.open(".zip", [this](const std::string& path)
+                                   { m_title_mgr.restoreBackup(path); });
+            }
+
+            ImGui::EndDisabled();
+
+            ImGui::EndMenu();
         }
+        ImGui::EndMenuBar();
     }
-    else
-    {
-        ImGui::Text("Invalid IP");
-    }
-
-    if (!old_valid)
-        ImGui::PopStyleColor();
-
-    ImGui::EndChild();
 }
 
 void MainWindow::showPopup(std::function<void()> func)
@@ -451,6 +478,7 @@ void MainWindow::render()
 {
     ImGuiWindowFlags window_flags = 0;
     window_flags |= ImGuiWindowFlags_NoDecoration;
+    window_flags |= ImGuiWindowFlags_MenuBar;
     window_flags |= ImGuiWindowFlags_NoMove;
     window_flags |= ImGuiWindowFlags_NoSavedSettings;
 

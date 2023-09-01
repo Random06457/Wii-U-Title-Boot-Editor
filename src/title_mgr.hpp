@@ -19,6 +19,18 @@ struct TitleId
     TitleType title_type;
 
     auto operator<=>(const TitleId& rhs) const = default;
+
+    std::filesystem::path getMetaPath() const
+    {
+        auto storage =
+            (title_type == TitleType_MLC ? "storage_mlc" : "storage_usb");
+        auto title_id_hi = title_id.substr(0, 8);
+        auto title_id_lo = title_id.substr(8, 8);
+        auto root = std::filesystem::path("/");
+
+        return root / storage / "usr" / "title" / title_id_hi / title_id_lo /
+               "meta";
+    }
 };
 
 template<>
@@ -76,8 +88,19 @@ public:
                     std::variant<WiiuConnexionError, ImageError, SoundError,
                                  MetaDirMissingFileError>>;
 
+    void backupTitles(const std::filesystem::path& zip) const;
+    void restoreBackup(const std::filesystem::path& zip);
+
 private:
     std::vector<std::string> ls(const std::filesystem::path& dir);
+    auto downloadMetaFile(const TitleId& title_id,
+                          const std::string& name) const
+        -> Expected<std::vector<char>,
+                    std::variant<WiiuConnexionError, MetaDirMissingFileError>>;
+
+    auto uploadMetaFile(const TitleId& titlte_id, const std::string& name,
+                        const void* data, size_t size) const
+        -> Expected<void, WiiuConnexionError>;
 
 private:
     std::unordered_map<TitleId, TitleMeta> m_cache;

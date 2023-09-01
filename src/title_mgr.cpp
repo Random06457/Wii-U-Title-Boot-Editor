@@ -1,6 +1,7 @@
 #include "title_mgr.hpp"
 #include <cassert>
 #include <fmt/format.h>
+#include <zip.h>
 #include "utils.hpp"
 
 TitleMgr::TitleMgr() :
@@ -19,6 +20,154 @@ TitleMgr::TitleMgr() :
 TitleMgr::~TitleMgr()
 {
     cleanup();
+}
+
+auto TitleMgr::downloadMetaFile(const TitleId& title_id,
+                                const std::string& name) const
+    -> Expected<std::vector<char>,
+                std::variant<WiiuConnexionError, MetaDirMissingFileError>>
+{
+    auto path = title_id.getMetaPath();
+    std::vector<char> buff;
+    CURLcode curl_ret;
+    if (!m_ftp.DownloadFile((path / name).string(), buff, curl_ret))
+    {
+        if (curl_ret == CURLE_REMOTE_FILE_NOT_FOUND)
+            return Unexpected(MetaDirMissingFileError{ name });
+        return Unexpected(WiiuConnexionError{ m_error });
+    }
+    return buff;
+}
+
+auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
+                              const void* data, size_t data_size) const
+    -> Expected<void, WiiuConnexionError>
+{
+
+    struct Ctx
+    {
+        const u8* data;
+        size_t size;
+        size_t pos;
+    } cur_ctx = {
+        .data = reinterpret_cast<const u8*>(data),
+        .size = data_size,
+        .pos = 0,
+    };
+
+    auto path = title_id.getMetaPath();
+    auto callback = [](void* ptr, size_t size, size_t nmemb,
+                       void* usr) -> size_t
+    {
+        auto* ctx = reinterpret_cast<Ctx*>(usr);
+        size_t actual_read = std::min(ctx->size, nmemb * size);
+        std::memcpy(ptr, ctx->data + ctx->pos, actual_read);
+        ctx->pos += actual_read;
+        return actual_read;
+    };
+
+    if (!m_ftp.UploadFile(callback, &cur_ctx, (path / name).string()))
+        return Unexpected(WiiuConnexionError{ m_error });
+
+    return {};
+}
+
+void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
+{
+    int err = 0;
+
+    if (std::filesystem::exists(zip_path))
+        std::filesystem::remove(zip_path);
+
+    zip* z = zip_open(zip_path.c_str(), ZIP_CREATE, &err);
+
+    auto process_file =
+        [this, z](const TitleId& title_id, const std::string& name)
+    {
+        const std::string storage =
+            title_id.title_type == TitleType_MLC ? "mlc" : "usb";
+        auto path =
+            std::filesystem::path(storage + "_" + title_id.title_id) / name;
+
+        zip_stat_t stat;
+        if (zip_stat(z, path.c_str(), 0, &stat) == -1)
+        {
+            fmt::print("Backup does not contain entry for {}\n", path.string());
+            return;
+        }
+
+        auto f = zip_fopen(z, path.c_str(), 0);
+
+        assert((stat.flags & ZIP_STAT_SIZE) != 0);
+
+        zip_uint64_t written = 0;
+
+        std::vector<u8> buf(stat.size);
+
+        while (written < stat.size)
+        {
+            auto cur =
+                zip_fread(f, buf.data() + written, stat.size - stat.size);
+            assert(cur > 0);
+            written += cur;
+        }
+
+        zip_fclose(f);
+
+        auto ret = uploadMetaFile(title_id, name,
+                                  reinterpret_cast<const void*>(buf.data()),
+                                  buf.size());
+    };
+
+    for (auto& title_id : m_titles)
+    {
+        process_file(title_id, "bootDrcTex.tga");
+        process_file(title_id, "bootTvTex.tga");
+        process_file(title_id, "bootLogoTex.tga");
+        process_file(title_id, "iconTex.tga");
+        process_file(title_id, "bootSound.btsnd");
+    }
+
+    zip_close(z);
+}
+
+void TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
+{
+    m_cache.clear();
+
+    int err = 0;
+    zip* z = zip_open(zip_path.c_str(), ZIP_RDONLY, &err);
+
+    auto process_file =
+        [this, z](const TitleId& title_id, const std::string& name)
+    {
+        auto file = downloadMetaFile(title_id, name);
+        if (!file)
+            return;
+
+        // buffer needs to outlive this scope, let libzip free it
+        auto buf = std::malloc(file->size());
+        std::memcpy(buf, file->data(), file->size());
+
+        zip_error_t zip_err;
+        auto src = zip_source_buffer_create(buf, file->size(), true, &zip_err);
+        const std::string storage =
+            title_id.title_type == TitleType_MLC ? "mlc" : "usb";
+        auto path =
+            std::filesystem::path(storage + "_" + title_id.title_id) / name;
+        zip_file_add(z, path.c_str(), src, ZIP_FL_ENC_UTF_8);
+    };
+
+    for (auto& title_id : m_titles)
+    {
+        process_file(title_id, "bootDrcTex.tga");
+        process_file(title_id, "bootTvTex.tga");
+        process_file(title_id, "bootLogoTex.tga");
+        process_file(title_id, "iconTex.tga");
+        process_file(title_id, "bootSound.btsnd");
+    }
+
+    zip_close(z);
 }
 
 static std::vector<std::string> splitLs(const std::string& s)
@@ -98,14 +247,7 @@ auto TitleMgr::getTitle(const TitleId& title_id)
     if (m_cache.contains(title_id))
         return &m_cache.at(title_id);
 
-    auto storage =
-        (title_id.title_type == TitleType_MLC ? "storage_mlc" : "storage_usb");
-    auto title_id_hi = title_id.title_id.substr(0, 8);
-    auto title_id_lo = title_id.title_id.substr(8, 8);
-    auto root = std::filesystem::path("/");
-
-    auto path =
-        root / storage / "usr" / "title" / title_id_hi / title_id_lo / "meta";
+    auto path = title_id.getMetaPath();
 
 #define DOWNLOAD_FILE(name, parse_func)                                        \
     ({                                                                         \
