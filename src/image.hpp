@@ -41,6 +41,7 @@ public:
                                                 size_t data_size);
 
     bool saveAsPng(const std::filesystem::path& path) const;
+    std::vector<u8> toWiiU(bool is_bg) const;
 
     size_t width() const { return m_width; }
     size_t height() const { return m_height; }
