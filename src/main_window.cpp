@@ -142,6 +142,7 @@ void MainWindow::renderSound()
 
                 m_player.pause();
                 m_curr_meta->meta.sound() = std::move(*new_sound);
+                m_curr_meta->meta.setDirty(true);
 
                 m_player.setSound(&m_curr_meta->meta.sound());
             });
@@ -206,6 +207,7 @@ void MainWindow::renderTex()
 
                         img = std::move(*new_img);
                         gl_img = img;
+                        m_curr_meta->meta.setDirty(true);
                     });
             }
             if (ImGui::Selectable("Save"))
@@ -326,8 +328,12 @@ void MainWindow::renderTitleList()
             if (title_id.title_type != m_title_type)
                 continue;
 
-            if (ImGui::Selectable(fmt::format("{}", title_id.title_id).c_str(),
-                                  i == m_selected_idx))
+            bool is_dirty = m_title_mgr.isTitleDirty(title_id);
+
+            if (ImGui::Selectable(
+                    fmt::format("{}{}", title_id.title_id, is_dirty ? "*" : "")
+                        .c_str(),
+                    i == m_selected_idx))
             {
                 if (i != m_selected_idx)
                 {
@@ -446,6 +452,12 @@ void MainWindow::renderHeader()
                 m_file_dialog.open(".zip", [this](const std::string& path)
                                    { m_title_mgr.restoreBackup(path); });
             }
+            ImGui::BeginDisabled(m_title_mgr.getDirtyTitles().size() == 0);
+            if (ImGui::MenuItem("Sync Changes"))
+            {
+                m_title_mgr.syncTitles();
+            }
+            ImGui::EndDisabled();
 
             ImGui::EndDisabled();
 
@@ -474,7 +486,7 @@ void MainWindow::showError(const std::string& msg)
         });
 }
 
-void MainWindow::render()
+void MainWindow::render(bool quit)
 {
     ImGuiWindowFlags window_flags = 0;
     window_flags |= ImGuiWindowFlags_NoDecoration;
@@ -493,6 +505,35 @@ void MainWindow::render()
     // ImGuiIO& io = ImGui::GetIO();
     // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
     //             1000.0f / io.Framerate, io.Framerate);
+
+    if (quit)
+    {
+        auto dirty_titles = m_title_mgr.getDirtyTitles();
+        if (dirty_titles.size() > 0)
+        {
+            showPopup(
+                [this]()
+                {
+                    ImGui::Text("You have unsaved changes, are you sure you "
+                                "want to quit?\nIf you want to save your "
+                                "changes, go to Wii U -> Sync Changes.");
+                    if (ImGui::Button("Yes"))
+                    {
+                        m_should_quit = true;
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("No"))
+                    {
+                        ImGui::CloseCurrentPopup();
+                    }
+                });
+        }
+        else
+        {
+            m_should_quit = true;
+        }
+    }
 
     if (m_open_popup_req)
     {

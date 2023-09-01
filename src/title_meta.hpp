@@ -32,6 +32,8 @@ public:
     const Image& logoTex() const { return m_logo_tex; }
     const Image& iconTex() const { return m_icon_tex; }
     const Sound& sound() const { return m_boot_sound; }
+    bool isDirty() const { return m_is_dirty; }
+    void setDirty(bool dirty) { m_is_dirty = dirty; }
     // deducing this when :/
     Image& drcTex() { return m_drc_tex; }
     Image& tvTex() { return m_tv_tex; }
@@ -45,4 +47,5 @@ private:
     Image m_logo_tex;
     Image m_icon_tex;
     Sound m_boot_sound;
+    bool m_is_dirty = false;
 };

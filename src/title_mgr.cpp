@@ -60,7 +60,7 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
                        void* usr) -> size_t
     {
         auto* ctx = reinterpret_cast<Ctx*>(usr);
-        size_t actual_read = std::min(ctx->size, nmemb * size);
+        size_t actual_read = std::min(ctx->size - ctx->pos, nmemb * size);
         std::memcpy(ptr, ctx->data + ctx->pos, actual_read);
         ctx->pos += actual_read;
         return actual_read;
@@ -72,14 +72,12 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
     return {};
 }
 
-void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
+void TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
 {
+    m_cache.clear();
+
     int err = 0;
-
-    if (std::filesystem::exists(zip_path))
-        std::filesystem::remove(zip_path);
-
-    zip* z = zip_open(zip_path.c_str(), ZIP_CREATE, &err);
+    zip* z = zip_open(zip_path.c_str(), ZIP_RDONLY, &err);
 
     auto process_file =
         [this, z](const TitleId& title_id, const std::string& name)
@@ -98,7 +96,7 @@ void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
 
         auto f = zip_fopen(z, path.c_str(), 0);
 
-        assert((stat.flags & ZIP_STAT_SIZE) != 0);
+        assert((stat.valid & ZIP_STAT_SIZE) != 0);
 
         zip_uint64_t written = 0;
 
@@ -106,8 +104,7 @@ void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
 
         while (written < stat.size)
         {
-            auto cur =
-                zip_fread(f, buf.data() + written, stat.size - stat.size);
+            auto cur = zip_fread(f, buf.data() + written, stat.size - written);
             assert(cur > 0);
             written += cur;
         }
@@ -131,12 +128,62 @@ void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
     zip_close(z);
 }
 
-void TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
+bool TitleMgr::isTitleDirty(const TitleId& title_id) const
 {
-    m_cache.clear();
+    if (!m_cache.contains(title_id))
+        return false;
+    return m_cache.at(title_id).isDirty();
+}
 
+std::vector<TitleId> TitleMgr::getDirtyTitles() const
+{
+    std::vector<TitleId> ret;
+    for (auto& [title_id, title] : m_cache)
+    {
+        if (title.isDirty())
+            ret.push_back(title_id);
+    }
+    return ret;
+}
+
+void TitleMgr::syncTitles()
+{
+    auto titles = getDirtyTitles();
+    for (auto& title_id : titles)
+    {
+        auto& title = m_cache.at(title_id);
+
+        // TODO: error handling
+#define UPLOAD_FILE(name, expr)                                                \
+    {                                                                          \
+        auto buf = expr;                                                       \
+        auto ret = uploadMetaFile(title_id, name,                              \
+                                  reinterpret_cast<const void*>(buf.data()),   \
+                                  buf.size());                                 \
+        if (!ret)                                                              \
+            std::abort();                                                      \
+    }
+
+        UPLOAD_FILE("bootSound.btsnd", title.sound().toBtsnd());
+        UPLOAD_FILE("bootDrcTex.tga", title.drcTex().toWiiU(true));
+        UPLOAD_FILE("bootTvTex.tga", title.tvTex().toWiiU(true));
+        UPLOAD_FILE("bootLogoTex.tga", title.logoTex().toWiiU(false));
+        UPLOAD_FILE("iconTex.tga", title.iconTex().toWiiU(false));
+
+#undef UPLOAD_FILE
+
+        title.setDirty(false);
+    }
+}
+
+void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
+{
     int err = 0;
-    zip* z = zip_open(zip_path.c_str(), ZIP_RDONLY, &err);
+
+    if (std::filesystem::exists(zip_path))
+        std::filesystem::remove(zip_path);
+
+    zip* z = zip_open(zip_path.c_str(), ZIP_CREATE, &err);
 
     auto process_file =
         [this, z](const TitleId& title_id, const std::string& name)

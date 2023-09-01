@@ -37,7 +37,8 @@ private:
 public:
     MainWindow();
 
-    void render();
+    void render(bool quit);
+    bool shouldQuit() const { return m_should_quit; }
 
 private:
     long m_selected_idx = -1;
@@ -50,4 +51,5 @@ private:
     bool m_open_popup_req = false;
     int m_title_type = TitleType_MLC;
     SoundPlayer m_player;
+    bool m_should_quit = false;
 };

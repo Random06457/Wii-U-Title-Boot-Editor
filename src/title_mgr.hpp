@@ -83,6 +83,9 @@ public:
     const std::string& errorMsg() const { return m_error; }
     const std::vector<TitleId>& getTitles() { return m_titles; }
 
+    bool isTitleDirty(const TitleId& title_id) const;
+    std::vector<TitleId> getDirtyTitles() const;
+    void syncTitles();
     auto getTitle(const TitleId& title_id)
         -> Expected<TitleMeta*,
                     std::variant<WiiuConnexionError, ImageError, SoundError,

@@ -68,9 +68,9 @@ int main(int, char**)
     MainWindow main_win;
 
     // Main loop
-    bool done = false;
-    while (!done)
+    while (!main_win.shouldQuit())
     {
+        bool quit_req = false;
         // Poll and handle events (inputs, window resize, etc.)
         // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to
         // tell if dear imgui wants to use your inputs.
@@ -86,11 +86,11 @@ int main(int, char**)
         {
             ImGui_ImplSDL2_ProcessEvent(&event);
             if (event.type == SDL_QUIT)
-                done = true;
+                quit_req = true;
             if (event.type == SDL_WINDOWEVENT &&
                 event.window.event == SDL_WINDOWEVENT_CLOSE &&
                 event.window.windowID == SDL_GetWindowID(window))
-                done = true;
+                quit_req = true;
         }
 
         // Start the Dear ImGui frame
@@ -98,7 +98,7 @@ int main(int, char**)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        main_win.render();
+        main_win.render(quit_req);
 
         // Rendering
         ImGui::Render();
