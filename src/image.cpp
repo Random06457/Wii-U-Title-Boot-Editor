@@ -110,19 +110,15 @@ std::expected<Image, ImageError> Image::fromWiiU(const void* tga_data,
     {
         size_t dst_off = (hdr->height - y - 1) * hdr->width;
         size_t src_off = y * hdr->width * hdr->bpp / 8;
-        if (hdr->bpp == 32)
+        for (size_t x = 0; x < hdr->width; x++)
         {
-            std::memcpy(data + dst_off, hdr->data + src_off,
-                        hdr->width * sizeof(u32));
-        }
-        else if (hdr->bpp == 24)
-        {
-            for (size_t x = 0; x < hdr->width; x++)
-            {
-                std::memcpy(data + dst_off + x,
-                            hdr->data + src_off + x * hdr->bpp / 8, 3);
-                data[dst_off + x] |= 0xFF000000; // alpha channel
-            }
+            u8 r = hdr->data[src_off + x * hdr->bpp / 8 + 0];
+            u8 g = hdr->data[src_off + x * hdr->bpp / 8 + 1];
+            u8 b = hdr->data[src_off + x * hdr->bpp / 8 + 2];
+            u8 a = hdr->bpp == 32 ? hdr->data[src_off + x * hdr->bpp / 8 + 3]
+                                  : 0xFF;
+
+            data[dst_off + x] = b | g << 8 | r << 16 | a << 24;
         }
     }
 
@@ -131,6 +127,6 @@ std::expected<Image, ImageError> Image::fromWiiU(const void* tga_data,
 
 bool Image::saveAsPng(const std::filesystem::path& path) const
 {
-    return stbi_write_png(path.c_str(), static_cast<int>(m_width),
+    return stbi_write_png(path.string().c_str(), static_cast<int>(m_width),
                           static_cast<int>(m_height), 4, data<void>(), 0) != 0;
 }
