@@ -56,8 +56,8 @@
 #define HAVE_STRINGS_H
 #define HAVE_UNISTD_H
 /* #undef HAVE_WINDOWS_CRYPTO */
-#define SIZEOF_OFF_T sizeof(off_t)
-#define SIZEOF_SIZE_T sizeof(size_t)
+#define SIZEOF_OFF_T (sizeof(off_t))
+#define SIZEOF_SIZE_T (sizeof(size_t))
 /* #undef HAVE_DIRENT_H */
 #define HAVE_FTS_H
 /* #undef HAVE_NDIR_H */
