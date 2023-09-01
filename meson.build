@@ -2,6 +2,7 @@ project('wiiu-title-boot-editor', 'cpp',
     default_options : [
         'warning_level=3',
         'cpp_args=-std=c++23',
+        'werror=true',
     ],
     subproject_dir: '3rd-party'
 )
@@ -54,18 +55,19 @@ inc = [
     'src/',
 ]
 
-fmt_dep = dependency('fmt')
 imgui_dep = dependency('imgui')
 libgl_dep = dependency('GL')
 sdl2_dep = dependency('SDL2')
 stb_dep = dependency('stb')
 ImGuiFileDialog_dep = dependency('ImGuiFileDialog')
 curl_dep = dependency('libcurl')
+ftpclient_dep = dependency('ftpclient-cpp')
 
 
 cmake = import('cmake')
-ftpclient_proj = cmake.subproject('ftpclient-cpp')
-ftpclient_dep = ftpclient_proj.dependency('ftpclient')
+opt_var = cmake.subproject_options()
+opt_var.add_cmake_defines({'FMT_MASTER_PROJECT': false})
+fmt_dep = cmake.subproject('fmt', options: opt_var).dependency('fmt')
 
 
 exe = executable('wiiu-title-boot-editor',

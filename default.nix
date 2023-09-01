@@ -22,8 +22,8 @@ cxx.stdenv.mkDerivation {
     buildInputs = [
         pkg-config
         SDL2
-        fmt_9
-        stb
+        # fmt_9
+        # stb
         curl
     ];
 }
