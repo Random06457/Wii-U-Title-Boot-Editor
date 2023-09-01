@@ -53,11 +53,7 @@ stb_dep = dependency('stb')
 ImGuiFileDialog_dep = dependency('ImGuiFileDialog')
 curl_dep = dependency('libcurl')
 ftpclient_dep = dependency('ftpclient-cpp')
-
-cmake = import('cmake')
-fmt_opt = cmake.subproject_options()
-fmt_opt.add_cmake_defines({'FMT_MASTER_PROJECT': false})
-fmt_dep = cmake.subproject('fmt', options: fmt_opt).dependency('fmt')
+fmt_dep = dependency('fmt')
 
 deps = [
     libgl_dep,
@@ -71,9 +67,7 @@ deps = [
 ]
 
 if not has_std_expected
-    expected_opt = cmake.subproject_options()
-    expected_opt.add_cmake_defines({'EXPECTED_BUILD_TESTS': false})
-    expected_dep = cmake.subproject('expected', options: expected_opt).dependency('expected')
+    expected_dep = dependency('expected')
     deps += expected_dep
 endif
 
