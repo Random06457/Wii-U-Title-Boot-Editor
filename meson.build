@@ -54,6 +54,7 @@ ImGuiFileDialog_dep = dependency('ImGuiFileDialog')
 curl_dep = dependency('libcurl')
 ftpclient_dep = dependency('ftpclient-cpp')
 fmt_dep = dependency('fmt')
+libzip_dep = dependency('libzip')
 
 deps = [
     libgl_dep,
@@ -64,6 +65,7 @@ deps = [
     ftpclient_dep,
     curl_dep,
     fmt_dep,
+    libzip_dep,
 ]
 
 if not has_std_expected
