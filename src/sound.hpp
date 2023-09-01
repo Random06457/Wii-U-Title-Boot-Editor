@@ -96,6 +96,7 @@ public:
     std::string formatName() const;
 
     std::vector<u8> toWave() const;
+    std::vector<u8> toBtsnd() const;
 
 private:
     std::vector<u8> m_sample_data;

@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fmt/format.h>
 #include <string_view>
+#include "utils.hpp"
 
 struct [[gnu::packed]] RiffHeader
 {
@@ -108,13 +109,8 @@ Expected<Sound, SoundError> Sound::fromBtsnd(const void* data, size_t data_size)
 {
     auto read32 = [&data](size_t off)
     {
-#ifdef __cpp_lib_byteswap
-        return std::byteswap(*reinterpret_cast<const u32*>(
+        return byteswap(*reinterpret_cast<const u32*>(
             reinterpret_cast<const u8*>(data) + off));
-#else
-        return __builtin_bswap32(*reinterpret_cast<const u32*>(
-            reinterpret_cast<const u8*>(data) + off));
-#endif
     };
 
     if (data_size < 8)
@@ -134,11 +130,7 @@ Expected<Sound, SoundError> Sound::fromBtsnd(const void* data, size_t data_size)
         u16* samples16 = reinterpret_cast<u16*>(vec.data());
         for (size_t i = 0; i < vec.size() / sizeof(u16); i++)
         {
-#ifdef __cpp_lib_byteswap
-            samples16[i] = std::byteswap(samples16[i]);
-#else
-            samples16[i] = __builtin_bswap16(samples16[i]);
-#endif
+            samples16[i] = byteswap(samples16[i]);
         }
     }
 
@@ -236,6 +228,23 @@ std::vector<u8> Sound::toWave() const
     // write file size
     getPtr.operator()<RiffHeader>(riff_hdr_off)->file_size =
         static_cast<u32>(ret.size() - 8);
+
+    return ret;
+}
+
+std::vector<u8> Sound::toBtsnd() const
+{
+    std::vector<u8> ret(8 + sampleCount() * sizeof(u16));
+
+    auto write = [&ret]<typename T>(size_t off, const T& x)
+    { *reinterpret_cast<T*>(ret.data() + off) = byteswap(x); };
+
+    write.operator()<u32>(0, static_cast<u32>(m_target));
+    write.operator()<u32>(4, static_cast<u32>(m_loop_sample));
+
+    auto samples = sampleData<u16>(0);
+    for (size_t i = 0; i < sampleCount(); i++)
+        write.operator()<u16>(8 + i * sizeof(u16), samples[i]);
 
     return ret;
 }

@@ -74,3 +74,22 @@ private:
     T m_func;
 };
 #endif
+
+#ifdef __cpp_lib_byteswap
+#define byteswap std::byteswap
+#else
+template<typename T>
+T byteswap(const T& v)
+{
+    static_assert(std::is_integral_v<T>);
+
+    if constexpr (sizeof(T) == 2)
+        return __builtin_bswap16(v);
+    if constexpr (sizeof(T) == 4)
+        return __builtin_bswap32(v);
+    if constexpr (sizeof(T) == 8)
+        return __builtin_bswap64(v);
+    else
+        std::abort();
+}
+#endif
