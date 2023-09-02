@@ -4,6 +4,17 @@
 #include <zip.h>
 #include "utils.hpp"
 
+std::filesystem::path TitleId::getMetaPath(const std::string& name) const
+{
+    auto storage =
+        (title_type == TitleType_MLC ? "storage_mlc" : "storage_usb");
+    auto title_id_hi = title_id.substr(0, 8);
+    auto title_id_lo = title_id.substr(8, 8);
+
+    return fmt::format("/{}/usr/title/{}/{}/meta/{}", storage, title_id_hi,
+                       title_id_lo, name);
+}
+
 TitleMgr::TitleMgr() :
     m_cache(),
     m_titles(),
@@ -12,7 +23,7 @@ TitleMgr::TitleMgr() :
         {
             m_error = msg;
             m_state = State_ConnectionFailed;
-            fmt::print("{}", msg);
+            fmt::print(stderr, "{}\n", msg);
         })
 {
     m_ftp.SetTimeout(10);
@@ -27,10 +38,10 @@ auto TitleMgr::downloadMetaFile(const TitleId& title_id,
     -> Expected<std::vector<char>,
                 std::variant<WiiuConnexionError, MetaDirMissingFileError>>
 {
-    auto path = title_id.getMetaPath();
+    auto path = title_id.getMetaPath(name);
     std::vector<char> buff;
     CURLcode curl_ret;
-    if (!m_ftp.DownloadFile((path / name).string(), buff, curl_ret))
+    if (!m_ftp.DownloadFile(path.string(), buff, curl_ret))
     {
         if (curl_ret == CURLE_REMOTE_FILE_NOT_FOUND)
             return Unexpected(MetaDirMissingFileError{ name });
@@ -55,7 +66,7 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
         .pos = 0,
     };
 
-    auto path = title_id.getMetaPath();
+    auto path = title_id.getMetaPath(name);
     auto callback = [](void* ptr, size_t size, size_t nmemb,
                        void* usr) -> size_t
     {
@@ -66,7 +77,8 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
         return actual_read;
     };
 
-    if (!m_ftp.UploadFile(callback, &cur_ctx, (path / name).string()))
+    fmt::print("FTP: Uploading \"{}\"\n", path.string());
+    if (!m_ftp.UploadFile(callback, &cur_ctx, path.string()))
         return Unexpected(WiiuConnexionError{ m_error });
 
     return {};
@@ -77,20 +89,19 @@ void TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
     m_cache.clear();
 
     int err = 0;
-    zip* z = zip_open(zip_path.c_str(), ZIP_RDONLY, &err);
+    zip* z = zip_open(zip_path.string().c_str(), ZIP_RDONLY, &err);
 
     auto process_file =
         [this, z](const TitleId& title_id, const std::string& name)
     {
-        const std::string storage =
-            title_id.title_type == TitleType_MLC ? "mlc" : "usb";
-        auto path =
-            std::filesystem::path(storage + "_" + title_id.title_id) / name;
+        auto path = fmt::format(
+            "{}_{}/{}", title_id.title_type == TitleType_MLC ? "mlc" : "usb",
+            title_id.title_id, name);
 
         zip_stat_t stat;
         if (zip_stat(z, path.c_str(), 0, &stat) == -1)
         {
-            fmt::print("Backup does not contain entry for {}\n", path.string());
+            fmt::print("Backup does not contain entry for {}\n", path);
             return;
         }
 
@@ -183,7 +194,7 @@ void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
     if (std::filesystem::exists(zip_path))
         std::filesystem::remove(zip_path);
 
-    zip* z = zip_open(zip_path.c_str(), ZIP_CREATE, &err);
+    zip* z = zip_open(zip_path.string().c_str(), ZIP_CREATE, &err);
 
     auto process_file =
         [this, z](const TitleId& title_id, const std::string& name)
@@ -198,10 +209,9 @@ void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
 
         zip_error_t zip_err;
         auto src = zip_source_buffer_create(buf, file->size(), true, &zip_err);
-        const std::string storage =
-            title_id.title_type == TitleType_MLC ? "mlc" : "usb";
-        auto path =
-            std::filesystem::path(storage + "_" + title_id.title_id) / name;
+        auto path = fmt::format(
+            "{}_{}/{}", title_id.title_type == TitleType_MLC ? "mlc" : "usb",
+            title_id.title_id, name);
         zip_file_add(z, path.c_str(), src, ZIP_FL_ENC_UTF_8);
     };
 
@@ -217,10 +227,20 @@ void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
     zip_close(z);
 }
 
-static std::vector<std::string> splitLs(const std::string& s)
+static std::vector<std::string> splitLs(std::string s)
 {
     size_t pos1 = 0;
     size_t pos2 = 0;
+
+    // remove \r
+    while ((pos2 = s.find("\r", pos1)) != std::string::npos)
+    {
+        s.erase(pos2, 1);
+        pos1 = pos2;
+    }
+
+    pos1 = 0;
+    pos2 = 0;
 
     std::vector<std::string> ret;
     while ((pos2 = s.find("\n", pos1)) != std::string::npos)
@@ -236,12 +256,14 @@ std::vector<std::string> TitleMgr::ls(const std::filesystem::path& dir)
 {
     std::string ret;
     CURLcode curl_code;
+    fmt::print("Listing dir \"{}\"\n", dir.string());
     if (!m_ftp.List(dir.string(), ret, curl_code))
     {
         if (curl_code != CURLE_OK)
             m_error = curl_easy_strerror(curl_code);
         return {};
     }
+    fmt::print("FTP: received:\n{}\n", ret);
     return splitLs(ret);
 }
 
@@ -260,14 +282,13 @@ Expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
     }
 
     // fetch titles
-    auto add_titles =
-        [this](const std::filesystem::path& path, TitleType title_type)
+    auto add_titles = [this](const std::string& path, TitleType title_type)
     {
         auto title_dir = ls(path);
 
         for (auto id_high : title_dir)
         {
-            auto high_dir = ls(path / id_high / "");
+            auto high_dir = ls(fmt::format("{}{}/", path, id_high));
             for (auto id_low : high_dir)
             {
                 const std::string title_id = id_high + id_low;
@@ -294,13 +315,13 @@ auto TitleMgr::getTitle(const TitleId& title_id)
     if (m_cache.contains(title_id))
         return &m_cache.at(title_id);
 
-    auto path = title_id.getMetaPath();
-
 #define DOWNLOAD_FILE(name, parse_func)                                        \
     ({                                                                         \
+        auto path = title_id.getMetaPath(name);                                \
         std::vector<char> buff;                                                \
         CURLcode curl_ret;                                                     \
-        if (!m_ftp.DownloadFile((path / name).string(), buff, curl_ret))       \
+        fmt::print("FTP: Downloading \"{}\"\n", path.string());                \
+        if (!m_ftp.DownloadFile(path.string(), buff, curl_ret))                \
         {                                                                      \
             if (curl_ret == CURLE_REMOTE_FILE_NOT_FOUND)                       \
                 return Unexpected(MetaDirMissingFileError{ name });            \

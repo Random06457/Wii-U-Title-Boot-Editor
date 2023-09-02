@@ -1246,7 +1246,9 @@ long CFTPClient::FileIsComingCallback(struct curl_fileinfo *finfo, WildcardTrans
     case CURLFILETYPE_DIRECTORY:
         // printf(" DIR\n");
         data->vecDirList.push_back(finfo->filename);
-#ifdef LINUX
+#if defined (__MINGW32__ )
+        if (mkdir((data->strOutputPath + finfo->filename).c_str()) != 0 && errno != EEXIST)
+#elif defined(LINUX)
         if (mkdir((data->strOutputPath + finfo->filename).c_str(), ACCESSPERMS) != 0 && errno != EEXIST)
 #else
         if (_mkdir((data->strOutputPath + finfo->filename).c_str()) != 0 && errno != EEXIST)

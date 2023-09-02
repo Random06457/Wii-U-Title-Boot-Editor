@@ -20,17 +20,7 @@ struct TitleId
 
     auto operator<=>(const TitleId& rhs) const = default;
 
-    std::filesystem::path getMetaPath() const
-    {
-        auto storage =
-            (title_type == TitleType_MLC ? "storage_mlc" : "storage_usb");
-        auto title_id_hi = title_id.substr(0, 8);
-        auto title_id_lo = title_id.substr(8, 8);
-        auto root = std::filesystem::path("/");
-
-        return root / storage / "usr" / "title" / title_id_hi / title_id_lo /
-               "meta";
-    }
+    std::filesystem::path getMetaPath(const std::string& name = "") const;
 };
 
 template<>
