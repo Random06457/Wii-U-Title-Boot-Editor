@@ -13,6 +13,22 @@ jobs:
   #   - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).clang_16; }'
   #   - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).gcc10; }'
   #   - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).gcc13; }'
+
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: |
+        sudo apt update
+        sudo apt-get install meson g++-12 libsdl2-dev libcurl4-openssl-dev libzip-dev -y
+        meson setup builddir
+        ninja -C builddir
+    - uses: actions/upload-artifact@v3
+      with:
+        name: wiiu-title-boot-editor-linux
+        path: |
+          ./builddir/wiiu-title-boot-editor
+
   build-cygwin:
     runs-on: windows-latest
     defaults:
@@ -26,3 +42,25 @@ jobs:
     - run: |
         meson setup --cross-file linux-mingw-w64-64bit.txt builddir
         ninja -C builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/SDL2.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libgcc_s_seh-1.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libstdc++-6.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libwinpthread-1.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libeay32.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libzip.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libcurl-4.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/iconv.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/zlib1.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libbz2-1.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libidn2-0.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libssh2-1.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libnghttp2-14.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/ssleay32.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libzstd-1.dll builddir
+        cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libintl-8.dll builddir
+    - uses: actions/upload-artifact@v3
+      with:
+        name: wiiu-title-boot-editor-windows
+        path: |
+          ./builddir/*.exe
+          ./builddir/*.dll
