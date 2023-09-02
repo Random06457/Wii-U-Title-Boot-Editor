@@ -117,7 +117,7 @@ void TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
         {
             auto cur = zip_fread(f, buf.data() + written, stat.size - written);
             assert(cur > 0);
-            written += cur;
+            written += (zip_uint64_t)cur;
         }
 
         zip_fclose(f);
