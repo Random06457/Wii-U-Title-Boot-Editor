@@ -2,14 +2,27 @@ name: "Build"
 on:
   push:
 jobs:
-  build-nix:
-    runs-on: ubuntu-latest
+  # build-nix:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - uses: cachix/install-nix-action@v22
+  #     with:
+  #       nix_path: nixpkgs=channel:nixos-unstable
+  #   - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).clang_13; }'
+  #   - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).clang_16; }'
+  #   - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).gcc10; }'
+  #   - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).gcc13; }'
+  build-cygwin:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: C:\tools\cygwin\bin\bash.exe -o igncr '{0}'
     steps:
     - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v22
+    - uses: egor-tensin/setup-cygwin@v4
       with:
-        nix_path: nixpkgs=channel:nixos-unstable
-    - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).clang_13; }'
-    - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).clang_16; }'
-    - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).gcc10; }'
-    - run: nix-build -E 'import ./default.nix { cxx=(import <nixpkgs> {}).gcc13; }'
+        packages: git mingw64-x86_64-SDL2 mingw64-x86_64-curl mingw64-x86_64-gcc-g++ mingw64-x86_64-libzip meson ninja
+    - run: |
+        meson setup --cross-file linux-mingw-w64-64bit.txt builddir
+        ninja -C builddir
