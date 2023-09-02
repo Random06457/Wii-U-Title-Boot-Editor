@@ -24,6 +24,7 @@ cxx.stdenv.mkDerivation {
         SDL2
         # fmt_9
         # stb
+        libzip
         curl
     ];
 }
