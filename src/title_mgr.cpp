@@ -288,6 +288,10 @@ Expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
 
         for (auto id_high : title_dir)
         {
+            // Skip DLC titles
+            if (id_high == "0005000c")
+                continue;
+
             auto high_dir = ls(fmt::format("{}{}/", path, id_high));
             for (auto id_low : high_dir)
             {
