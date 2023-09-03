@@ -22,7 +22,6 @@ TitleMgr::TitleMgr() :
         [this](const std::string& msg)
         {
             m_error = msg;
-            m_state = State_ConnectionFailed;
             fmt::print(stderr, "{}\n", msg);
         })
 {
@@ -84,15 +83,26 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
     return {};
 }
 
-void TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
+auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
+    -> Expected<void, std::variant<ZipError, WiiuConnexionError>>
 {
     m_cache.clear();
 
-    int err = 0;
-    zip* z = zip_open(zip_path.string().c_str(), ZIP_RDONLY, &err);
+    int err_code = 0;
+    zip* z = zip_open(zip_path.string().c_str(), ZIP_RDONLY, &err_code);
+    if (z == nullptr)
+    {
+        zip_error_t error;
+        zip_error_init_with_code(&error, err_code);
+        fmt::print(stderr, "zip_open: failed to open \"{}\" : {}\n",
+                   zip_path.string(), zip_error_strerror(&error));
+        zip_error_fini(&error);
+        return Unexpected(ZipError{ zip_error_strerror(&error) });
+    }
 
-    auto process_file =
-        [this, z](const TitleId& title_id, const std::string& name)
+    auto process_file = [this, z](const TitleId& title_id,
+                                  const std::string& name)
+        -> Expected<void, std::variant<WiiuConnexionError>>
     {
         auto path = fmt::format(
             "{}_{}/{}", title_id.title_type == TitleType_MLC ? "mlc" : "usb",
@@ -101,8 +111,8 @@ void TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
         zip_stat_t stat;
         if (zip_stat(z, path.c_str(), 0, &stat) == -1)
         {
-            fmt::print("Backup does not contain entry for {}\n", path);
-            return;
+            fmt::print(stderr, "Backup does not contain entry for {}\n", path);
+            return {};
         }
 
         auto f = zip_fopen(z, path.c_str(), 0);
@@ -122,21 +132,22 @@ void TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
 
         zip_fclose(f);
 
-        auto ret = uploadMetaFile(title_id, name,
-                                  reinterpret_cast<const void*>(buf.data()),
-                                  buf.size());
+        return uploadMetaFile(title_id, name,
+                              reinterpret_cast<const void*>(buf.data()),
+                              buf.size());
     };
 
     for (auto& title_id : m_titles)
     {
-        process_file(title_id, "bootDrcTex.tga");
-        process_file(title_id, "bootTvTex.tga");
-        process_file(title_id, "bootLogoTex.tga");
-        process_file(title_id, "iconTex.tga");
-        process_file(title_id, "bootSound.btsnd");
+        PROPAGATE_VOID(process_file(title_id, "bootDrcTex.tga"));
+        PROPAGATE_VOID(process_file(title_id, "bootTvTex.tga"));
+        PROPAGATE_VOID(process_file(title_id, "bootLogoTex.tga"));
+        PROPAGATE_VOID(process_file(title_id, "iconTex.tga"));
+        PROPAGATE_VOID(process_file(title_id, "bootSound.btsnd"));
     }
 
     zip_close(z);
+    return {};
 }
 
 bool TitleMgr::isTitleDirty(const TitleId& title_id) const
@@ -157,14 +168,13 @@ std::vector<TitleId> TitleMgr::getDirtyTitles() const
     return ret;
 }
 
-void TitleMgr::syncTitles()
+auto TitleMgr::syncTitles() -> Expected<void, WiiuConnexionError>
 {
     auto titles = getDirtyTitles();
     for (auto& title_id : titles)
     {
         auto& title = m_cache.at(title_id);
 
-        // TODO: error handling
 #define UPLOAD_FILE(name, expr)                                                \
     {                                                                          \
         auto buf = expr;                                                       \
@@ -172,7 +182,7 @@ void TitleMgr::syncTitles()
                                   reinterpret_cast<const void*>(buf.data()),   \
                                   buf.size());                                 \
         if (!ret)                                                              \
-            std::abort();                                                      \
+            return ret;                                                        \
     }
 
         UPLOAD_FILE("bootSound.btsnd", title.sound().toBtsnd());
@@ -185,23 +195,36 @@ void TitleMgr::syncTitles()
 
         title.setDirty(false);
     }
+    return {};
 }
 
-void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
+auto TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
+    -> Expected<void, std::variant<WiiuConnexionError>>
 {
-    int err = 0;
+    int err_code = 0;
 
     if (std::filesystem::exists(zip_path))
         std::filesystem::remove(zip_path);
 
-    zip* z = zip_open(zip_path.string().c_str(), ZIP_CREATE, &err);
+    zip* z = zip_open(zip_path.string().c_str(), ZIP_CREATE, &err_code);
 
-    auto process_file =
-        [this, z](const TitleId& title_id, const std::string& name)
+    auto process_file = [this, z](const TitleId& title_id,
+                                  const std::string& name)
+        -> Expected<void, std::variant<WiiuConnexionError>>
     {
         auto file = downloadMetaFile(title_id, name);
         if (!file)
-            return;
+        {
+            PROPAGATE_VOID(std::visit(
+                overloaded{
+                    [](const WiiuConnexionError& x)
+                        -> Expected<void, std::variant<WiiuConnexionError>>
+                    { return Unexpected(x); },
+                    [](const MetaDirMissingFileError&)
+                        -> Expected<void, std::variant<WiiuConnexionError>>
+                    { return {}; } },
+                file.error()));
+        }
 
         // buffer needs to outlive this scope, let libzip free it
         auto buf = std::malloc(file->size());
@@ -213,18 +236,20 @@ void TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
             "{}_{}/{}", title_id.title_type == TitleType_MLC ? "mlc" : "usb",
             title_id.title_id, name);
         zip_file_add(z, path.c_str(), src, ZIP_FL_ENC_UTF_8);
+        return {};
     };
 
     for (auto& title_id : m_titles)
     {
-        process_file(title_id, "bootDrcTex.tga");
-        process_file(title_id, "bootTvTex.tga");
-        process_file(title_id, "bootLogoTex.tga");
-        process_file(title_id, "iconTex.tga");
-        process_file(title_id, "bootSound.btsnd");
+        PROPAGATE_VOID(process_file(title_id, "bootDrcTex.tga"));
+        PROPAGATE_VOID(process_file(title_id, "bootTvTex.tga"));
+        PROPAGATE_VOID(process_file(title_id, "bootLogoTex.tga"));
+        PROPAGATE_VOID(process_file(title_id, "iconTex.tga"));
+        PROPAGATE_VOID(process_file(title_id, "bootSound.btsnd"));
     }
 
     zip_close(z);
+    return {};
 }
 
 static std::vector<std::string> splitLs(std::string s)
@@ -252,22 +277,22 @@ static std::vector<std::string> splitLs(std::string s)
     return ret;
 }
 
-std::vector<std::string> TitleMgr::ls(const std::filesystem::path& dir)
+auto TitleMgr::ls(const std::filesystem::path& dir)
+    -> Expected<std::vector<std::string>, std::variant<WiiuConnexionError>>
 {
     std::string ret;
     CURLcode curl_code;
     fmt::print("Listing dir \"{}\"\n", dir.string());
     if (!m_ftp.List(dir.string(), ret, curl_code))
     {
-        if (curl_code != CURLE_OK)
-            m_error = curl_easy_strerror(curl_code);
-        return {};
+        return Unexpected(WiiuConnexionError{ m_error });
     }
     fmt::print("FTP: received:\n{}\n", ret);
     return splitLs(ret);
 }
 
-Expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
+auto TitleMgr::connect(const std::string& ip)
+    -> Expected<void, std::variant<WiiuConnexionError>>
 {
     m_state = State_Connected;
     m_cache.clear();
@@ -283,8 +308,9 @@ Expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
 
     // fetch titles
     auto add_titles = [this](const std::string& path, TitleType title_type)
+        -> Expected<void, std::variant<WiiuConnexionError>>
     {
-        auto title_dir = ls(path);
+        auto title_dir = PROPAGATE(ls(path));
 
         for (auto id_high : title_dir)
         {
@@ -292,7 +318,7 @@ Expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
             if (id_high == "0005000c")
                 continue;
 
-            auto high_dir = ls(fmt::format("{}{}/", path, id_high));
+            auto high_dir = PROPAGATE(ls(fmt::format("{}{}/", path, id_high)));
             for (auto id_low : high_dir)
             {
                 const std::string title_id = id_high + id_low;
@@ -302,10 +328,11 @@ Expected<void, WiiuConnexionError> TitleMgr::connect(const std::string& ip)
                 });
             }
         }
+        return {};
     };
 
-    add_titles("/storage_mlc/usr/title/", TitleType_MLC);
-    add_titles("/storage_usb/usr/title/", TitleType_USB);
+    PROPAGATE_VOID(add_titles("/storage_mlc/usr/title/", TitleType_MLC));
+    PROPAGATE_VOID(add_titles("/storage_usb/usr/title/", TitleType_USB));
 
     return {};
 }

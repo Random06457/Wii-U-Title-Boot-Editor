@@ -39,6 +39,11 @@ struct WiiuConnexionError
     std::string error;
 };
 
+struct ZipError
+{
+    std::string msg;
+};
+
 class TitleMgr
 {
 public:
@@ -54,7 +59,8 @@ public:
     TitleMgr();
     ~TitleMgr();
 
-    Expected<void, WiiuConnexionError> connect(const std::string& ip);
+    auto connect(const std::string& ip)
+        -> Expected<void, std::variant<WiiuConnexionError>>;
 
     void cleanup()
     {
@@ -75,17 +81,20 @@ public:
 
     bool isTitleDirty(const TitleId& title_id) const;
     std::vector<TitleId> getDirtyTitles() const;
-    void syncTitles();
+    auto syncTitles() -> Expected<void, WiiuConnexionError>;
     auto getTitle(const TitleId& title_id)
         -> Expected<TitleMeta*,
                     std::variant<WiiuConnexionError, ImageError, SoundError,
                                  MetaDirMissingFileError>>;
 
-    void backupTitles(const std::filesystem::path& zip) const;
-    void restoreBackup(const std::filesystem::path& zip);
+    auto backupTitles(const std::filesystem::path& zip) const
+        -> Expected<void, std::variant<WiiuConnexionError>>;
+    auto restoreBackup(const std::filesystem::path& zip)
+        -> Expected<void, std::variant<ZipError, WiiuConnexionError>>;
 
 private:
-    std::vector<std::string> ls(const std::filesystem::path& dir);
+    auto ls(const std::filesystem::path& dir)
+        -> Expected<std::vector<std::string>, std::variant<WiiuConnexionError>>;
     auto downloadMetaFile(const TitleId& title_id,
                           const std::string& name) const
         -> Expected<std::vector<char>,

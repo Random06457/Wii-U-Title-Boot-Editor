@@ -47,6 +47,15 @@ auto variant_cast(const std::variant<Args...>& v) -> variant_cast_proxy<Args...>
     return { v };
 }
 
+#define PROPAGATE_VOID(...)                                                    \
+    ({                                                                         \
+        auto err = __VA_ARGS__;                                                \
+        if (!err)                                                              \
+        {                                                                      \
+            return Unexpected(variant_cast(err.error()));                      \
+        }                                                                      \
+    })
+
 #define PROPAGATE(...)                                                         \
     ({                                                                         \
         auto err = __VA_ARGS__;                                                \
