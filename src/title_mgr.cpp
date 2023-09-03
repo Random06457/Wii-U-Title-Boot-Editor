@@ -34,8 +34,7 @@ TitleMgr::~TitleMgr()
 
 auto TitleMgr::downloadMetaFile(const TitleId& title_id,
                                 const std::string& name) const
-    -> Expected<std::vector<char>,
-                std::variant<WiiuConnexionError, MetaDirMissingFileError>>
+    -> Result<std::vector<char>, WiiuConnexionError, MetaDirMissingFileError>
 {
     auto path = title_id.getMetaPath(name);
     std::vector<char> buff;
@@ -51,7 +50,7 @@ auto TitleMgr::downloadMetaFile(const TitleId& title_id,
 
 auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
                               const void* data, size_t data_size) const
-    -> Expected<void, WiiuConnexionError>
+    -> Error<WiiuConnexionError>
 {
 
     struct Ctx
@@ -84,7 +83,7 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
 }
 
 auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
-    -> Expected<void, std::variant<ZipError, WiiuConnexionError>>
+    -> Error<ZipError, WiiuConnexionError>
 {
     m_cache.clear();
 
@@ -100,9 +99,9 @@ auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
         return Unexpected(ZipError{ zip_error_strerror(&error) });
     }
 
-    auto process_file = [this, z](const TitleId& title_id,
-                                  const std::string& name)
-        -> Expected<void, std::variant<WiiuConnexionError>>
+    auto process_file =
+        [this, z](const TitleId& title_id,
+                  const std::string& name) -> Error<WiiuConnexionError>
     {
         auto path = fmt::format(
             "{}_{}/{}", title_id.title_type == TitleType_MLC ? "mlc" : "usb",
@@ -168,7 +167,7 @@ std::vector<TitleId> TitleMgr::getDirtyTitles() const
     return ret;
 }
 
-auto TitleMgr::syncTitles() -> Expected<void, WiiuConnexionError>
+auto TitleMgr::syncTitles() -> Error<WiiuConnexionError>
 {
     auto titles = getDirtyTitles();
     for (auto& title_id : titles)
@@ -199,7 +198,7 @@ auto TitleMgr::syncTitles() -> Expected<void, WiiuConnexionError>
 }
 
 auto TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
-    -> Expected<void, std::variant<WiiuConnexionError>>
+    -> Error<WiiuConnexionError>
 {
     int err_code = 0;
 
@@ -208,21 +207,19 @@ auto TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
 
     zip* z = zip_open(zip_path.string().c_str(), ZIP_CREATE, &err_code);
 
-    auto process_file = [this, z](const TitleId& title_id,
-                                  const std::string& name)
-        -> Expected<void, std::variant<WiiuConnexionError>>
+    auto process_file =
+        [this, z](const TitleId& title_id,
+                  const std::string& name) -> Error<WiiuConnexionError>
     {
         auto file = downloadMetaFile(title_id, name);
         if (!file)
         {
             PROPAGATE_VOID(std::visit(
                 overloaded{
-                    [](const WiiuConnexionError& x)
-                        -> Expected<void, std::variant<WiiuConnexionError>>
+                    [](const WiiuConnexionError& x) -> Error<WiiuConnexionError>
                     { return Unexpected(x); },
                     [](const MetaDirMissingFileError&)
-                        -> Expected<void, std::variant<WiiuConnexionError>>
-                    { return {}; } },
+                        -> Error<WiiuConnexionError> { return {}; } },
                 file.error()));
         }
 
@@ -278,7 +275,7 @@ static std::vector<std::string> splitLs(std::string s)
 }
 
 auto TitleMgr::ls(const std::filesystem::path& dir)
-    -> Expected<std::vector<std::string>, std::variant<WiiuConnexionError>>
+    -> Result<std::vector<std::string>, WiiuConnexionError>
 {
     std::string ret;
     CURLcode curl_code;
@@ -291,8 +288,7 @@ auto TitleMgr::ls(const std::filesystem::path& dir)
     return splitLs(ret);
 }
 
-auto TitleMgr::connect(const std::string& ip)
-    -> Expected<void, std::variant<WiiuConnexionError>>
+auto TitleMgr::connect(const std::string& ip) -> Error<WiiuConnexionError>
 {
     m_state = State_Connected;
     m_cache.clear();
@@ -307,8 +303,8 @@ auto TitleMgr::connect(const std::string& ip)
     }
 
     // fetch titles
-    auto add_titles = [this](const std::string& path, TitleType title_type)
-        -> Expected<void, std::variant<WiiuConnexionError>>
+    auto add_titles = [this](const std::string& path,
+                             TitleType title_type) -> Error<WiiuConnexionError>
     {
         auto title_dir = PROPAGATE(ls(path));
 
@@ -338,8 +334,8 @@ auto TitleMgr::connect(const std::string& ip)
 }
 
 auto TitleMgr::getTitle(const TitleId& title_id)
-    -> Expected<TitleMeta*, std::variant<WiiuConnexionError, ImageError,
-                                         SoundError, MetaDirMissingFileError>>
+    -> Result<TitleMeta*, WiiuConnexionError, ImageError, SoundError,
+              MetaDirMissingFileError>
 {
     assert(m_state == State_Connected);
 
@@ -358,11 +354,8 @@ auto TitleMgr::getTitle(const TitleId& title_id)
                 return Unexpected(MetaDirMissingFileError{ name });            \
             return Unexpected(WiiuConnexionError{ m_error });                  \
         }                                                                      \
-        auto ret = parse_func(reinterpret_cast<const void*>(buff.data()),      \
-                              buff.size());                                    \
-        if (!ret)                                                              \
-            return Unexpected(ret.error());                                    \
-        std::move(ret.value());                                                \
+        std::move(PROPAGATE(parse_func(                                        \
+            reinterpret_cast<const void*>(buff.data()), buff.size())));        \
     })
 
     Image drc_tex = DOWNLOAD_FILE("bootDrcTex.tga", Image::fromWiiU);

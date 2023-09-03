@@ -59,8 +59,7 @@ public:
     TitleMgr();
     ~TitleMgr();
 
-    auto connect(const std::string& ip)
-        -> Expected<void, std::variant<WiiuConnexionError>>;
+    auto connect(const std::string& ip) -> Error<WiiuConnexionError>;
 
     void cleanup()
     {
@@ -81,28 +80,27 @@ public:
 
     bool isTitleDirty(const TitleId& title_id) const;
     std::vector<TitleId> getDirtyTitles() const;
-    auto syncTitles() -> Expected<void, WiiuConnexionError>;
+    auto syncTitles() -> Error<WiiuConnexionError>;
     auto getTitle(const TitleId& title_id)
-        -> Expected<TitleMeta*,
-                    std::variant<WiiuConnexionError, ImageError, SoundError,
-                                 MetaDirMissingFileError>>;
+        -> Result<TitleMeta*, WiiuConnexionError, ImageError, SoundError,
+                  MetaDirMissingFileError>;
 
     auto backupTitles(const std::filesystem::path& zip) const
-        -> Expected<void, std::variant<WiiuConnexionError>>;
+        -> Error<WiiuConnexionError>;
     auto restoreBackup(const std::filesystem::path& zip)
-        -> Expected<void, std::variant<ZipError, WiiuConnexionError>>;
+        -> Error<ZipError, WiiuConnexionError>;
 
 private:
     auto ls(const std::filesystem::path& dir)
-        -> Expected<std::vector<std::string>, std::variant<WiiuConnexionError>>;
+        -> Result<std::vector<std::string>, WiiuConnexionError>;
     auto downloadMetaFile(const TitleId& title_id,
                           const std::string& name) const
-        -> Expected<std::vector<char>,
-                    std::variant<WiiuConnexionError, MetaDirMissingFileError>>;
+        -> Result<std::vector<char>, WiiuConnexionError,
+                  MetaDirMissingFileError>;
 
     auto uploadMetaFile(const TitleId& titlte_id, const std::string& name,
                         const void* data, size_t size) const
-        -> Expected<void, WiiuConnexionError>;
+        -> Error<WiiuConnexionError>;
 
 private:
     std::unordered_map<TitleId, TitleMeta> m_cache;

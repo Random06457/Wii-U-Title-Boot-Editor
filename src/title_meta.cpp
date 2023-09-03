@@ -26,8 +26,7 @@ TitleMeta& TitleMeta::operator=(TitleMeta&& other)
 }
 
 auto TitleMeta::fromDir(const std::filesystem::path& path)
-    -> Expected<TitleMeta,
-                std::variant<ImageError, SoundError, MetaDirMissingFileError>>
+    -> Result<TitleMeta, ImageError, SoundError, MetaDirMissingFileError>
 {
     auto drc_tex_path = path / "bootDrcTex.tga";
     auto tv_tex_path = path / "bootTvTex.tga";
@@ -46,27 +45,15 @@ auto TitleMeta::fromDir(const std::filesystem::path& path)
     if (!File::exists(boot_sound_path))
         return Unexpected(MetaDirMissingFileError{ "bootSound.btsnd" });
 
-    auto drc_tex = Image::fromWiiU(File::readAllBytes(drc_tex_path));
-    if (!drc_tex)
-        return Unexpected(drc_tex.error());
+    auto drc_tex = PROPAGATE(Image::fromWiiU(File::readAllBytes(drc_tex_path)));
+    auto tv_tex = PROPAGATE(Image::fromWiiU(File::readAllBytes(tv_tex_path)));
+    auto logo_tex =
+        PROPAGATE(Image::fromWiiU(File::readAllBytes(logo_tex_path)));
+    auto icon_tex =
+        PROPAGATE(Image::fromWiiU(File::readAllBytes(icon_tex_path)));
+    auto boot_sound =
+        PROPAGATE(Sound::fromBtsnd(File::readAllBytes(boot_sound_path)));
 
-    auto tv_tex = Image::fromWiiU(File::readAllBytes(tv_tex_path));
-    if (!tv_tex)
-        return Unexpected(tv_tex.error());
-
-    auto logo_tex = Image::fromWiiU(File::readAllBytes(logo_tex_path));
-    if (!logo_tex)
-        return Unexpected(logo_tex.error());
-
-    auto icon_tex = Image::fromWiiU(File::readAllBytes(icon_tex_path));
-    if (!icon_tex)
-        return Unexpected(icon_tex.error());
-
-    auto boot_sound = Sound::fromBtsnd(File::readAllBytes(boot_sound_path));
-    if (!boot_sound)
-        return Unexpected(boot_sound.error());
-
-    return TitleMeta(std::move(*drc_tex), std::move(*tv_tex),
-                     std::move(*logo_tex), std::move(*icon_tex),
-                     std::move(*boot_sound));
+    return TitleMeta(std::move(drc_tex), std::move(tv_tex), std::move(logo_tex),
+                     std::move(icon_tex), std::move(boot_sound));
 }

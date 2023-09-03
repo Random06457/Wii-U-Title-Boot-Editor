@@ -105,7 +105,8 @@ Sound& Sound::operator=(Sound&& other)
     return *this;
 }
 
-Expected<Sound, SoundError> Sound::fromBtsnd(const void* data, size_t data_size)
+auto Sound::fromBtsnd(const void* data, size_t data_size)
+    -> Result<Sound, SoundError>
 {
     auto read32 = [&data](size_t off)
     {
@@ -138,8 +139,8 @@ Expected<Sound, SoundError> Sound::fromBtsnd(const void* data, size_t data_size)
                  sample_loop, target);
 }
 
-Expected<Sound, WaveFileError>
-Sound::fromWave(const void* data, size_t data_size, SDL_AudioSpec* out_spec)
+auto Sound::fromWave(const void* data, size_t data_size,
+                     SDL_AudioSpec* out_spec) -> Result<Sound, WaveFileError>
 {
     SDL_AudioSpec spec;
     Uint8* audio_buf;

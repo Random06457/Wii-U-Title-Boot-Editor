@@ -42,23 +42,25 @@ public:
     Sound& operator=(Sound&&);
 
     template<typename T>
-    static Expected<Sound, SoundError> fromBtsnd(const std::vector<T>& data)
+    static auto fromBtsnd(const std::vector<T>& data)
+        -> Result<Sound, SoundError>
     {
         return fromBtsnd(reinterpret_cast<const void*>(data.data()),
                          data.size() * sizeof(T));
     }
-    static Expected<Sound, SoundError> fromBtsnd(const void* data,
-                                                 size_t data_size);
+    static auto fromBtsnd(const void* data, size_t data_size)
+        -> Result<Sound, SoundError>;
     template<typename T>
-    static Expected<Sound, WaveFileError>
-    fromWave(const std::vector<T>& data, SDL_AudioSpec* out_spec = nullptr)
+    static auto fromWave(const std::vector<T>& data,
+                         SDL_AudioSpec* out_spec = nullptr)
+        -> Result<Sound, WaveFileError>
     {
         return fromWave(reinterpret_cast<const void*>(data.data()),
                         data.size() * sizeof(T), out_spec);
     }
-    static Expected<Sound, WaveFileError>
-    fromWave(const void* data, size_t data_size,
-             SDL_AudioSpec* out_spec = nullptr);
+    static auto fromWave(const void* data, size_t data_size,
+                         SDL_AudioSpec* out_spec = nullptr)
+        -> Result<Sound, WaveFileError>;
 
     template<typename T>
     const T* sampleData(size_t off) const

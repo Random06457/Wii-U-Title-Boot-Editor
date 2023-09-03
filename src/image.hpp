@@ -26,19 +26,22 @@ public:
     Image& operator=(const Image& img);
     Image& operator=(Image&& img);
 
-    static Expected<Image, ImageError> fromStb(const std::vector<u8>& data)
+    static auto fromStb(const std::vector<u8>& data)
+        -> Result<Image, ImageError>
     {
         return fromStb(reinterpret_cast<const void*>(data.data()), data.size());
     }
-    static Expected<Image, ImageError> fromStb(const void* data,
-                                               size_t data_size);
-    static Expected<Image, ImageError> fromWiiU(const std::vector<u8>& data)
+    static auto fromStb(const void* data, size_t data_size)
+        -> Result<Image, ImageError>;
+
+    static auto fromWiiU(const std::vector<u8>& data)
+        -> Result<Image, ImageError>
     {
         return fromWiiU(reinterpret_cast<const void*>(data.data()),
                         data.size());
     }
-    static Expected<Image, ImageError> fromWiiU(const void* data,
-                                                size_t data_size);
+    static auto fromWiiU(const void* data, size_t data_size)
+        -> Result<Image, ImageError>;
 
     bool saveAsPng(const std::filesystem::path& path) const;
     std::vector<u8> toWiiU(bool is_bg) const;

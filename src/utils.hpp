@@ -17,6 +17,12 @@
 #endif
 #include <variant>
 
+template<typename T, typename... Errors>
+using Result = Expected<T, std::variant<Errors...>>;
+
+template<typename... Errors>
+using Error = Expected<void, std::variant<Errors...>>;
+
 // https://en.cppreference.com/w/cpp/utility/variant/visit
 template<class... Ts>
 struct overloaded : Ts...

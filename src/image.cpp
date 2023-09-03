@@ -49,7 +49,8 @@ Image& Image::operator=(Image&& img)
     return *this;
 }
 
-Expected<Image, ImageError> Image::fromStb(const void* data, size_t data_size)
+auto Image::fromStb(const void* data, size_t data_size)
+    -> Result<Image, ImageError>
 {
     int w;
     int h;
@@ -65,8 +66,8 @@ Expected<Image, ImageError> Image::fromStb(const void* data, size_t data_size)
                  { stbi_image_free(reinterpret_cast<void*>(img)); });
 }
 
-Expected<Image, ImageError> Image::fromWiiU(const void* tga_data,
-                                            size_t data_size)
+auto Image::fromWiiU(const void* tga_data, size_t data_size)
+    -> Result<Image, ImageError>
 {
     if (data_size < sizeof(TgaHeader))
         return Unexpected(ImageError_InvalidOrUnsupportedTGA);
