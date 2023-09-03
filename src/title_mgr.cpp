@@ -290,7 +290,6 @@ auto TitleMgr::ls(const std::filesystem::path& dir)
 
 auto TitleMgr::connect(const std::string& ip) -> Error<WiiuConnexionError>
 {
-    m_state = State_Connected;
     m_cache.clear();
     m_titles.clear();
     m_error.clear();
@@ -337,8 +336,6 @@ auto TitleMgr::getTitle(const TitleId& title_id)
     -> Result<TitleMeta*, WiiuConnexionError, ImageError, SoundError,
               MetaDirMissingFileError>
 {
-    assert(m_state == State_Connected);
-
     if (m_cache.contains(title_id))
         return &m_cache.at(title_id);
 

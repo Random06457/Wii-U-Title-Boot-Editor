@@ -314,7 +314,7 @@ void MainWindow::renderTitleList()
     ImGui::Spacing();
     ImGui::Separator();
 
-    if (m_title_mgr.connected())
+    if (m_state == State_Connected)
     {
 #ifdef __cpp_lib_ranges_enumerate
         for (auto [i, title_id] :
@@ -342,12 +342,8 @@ void MainWindow::renderTitleList()
                     {
                         std::visit(
                             overloaded{
-                                [this](const WiiuConnexionError& err)
-                                {
-                                    showError(err.error);
-                                    m_curr_meta.reset();
-                                    m_title_mgr.cleanup();
-                                },
+                                std::bind(&MainWindow::setConnexionError, this,
+                                          std::placeholders::_1),
                                 [this](const MetaDirMissingFileError& err) {
                                     showError(fmt::format("Could not find {}",
                                                           err.filename));
@@ -379,6 +375,14 @@ void MainWindow::renderTitleList()
     ImGui::EndChild();
 }
 
+void MainWindow::setConnexionError(const WiiuConnexionError& err)
+{
+    showError(err.error);
+    m_state = State_ConnectionFailed;
+    m_curr_meta.reset();
+    m_title_mgr.cleanup();
+}
+
 void MainWindow::renderHeader()
 {
     if (ImGui::BeginMenuBar())
@@ -391,7 +395,7 @@ void MainWindow::renderHeader()
             if (!old_valid)
                 ImGui::PushStyleColor(ImGuiCol_Text, { 255, 0, 0, 255 });
 
-            ImGui::BeginDisabled(m_title_mgr.connected());
+            ImGui::BeginDisabled(m_state == State_Connected);
             if (ImGui::InputText("##IP", m_ip, sizeof(m_ip)))
             {
                 m_is_ip_valid = isValidIp(m_ip);
@@ -400,13 +404,13 @@ void MainWindow::renderHeader()
 
             ImGui::SameLine();
 
-            if (m_title_mgr.connected())
+            if (m_state == State_Connected)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, { 0, 255, 0, 255 });
                 ImGui::Text("Connected");
                 ImGui::PopStyleColor();
             }
-            else if (m_title_mgr.connecting())
+            else if (m_state == State_Connecting)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, { 255, 255, 0, 255 });
                 ImGui::Text("Connecting...");
@@ -419,9 +423,11 @@ void MainWindow::renderHeader()
                     auto res = m_title_mgr.connect(m_ip);
                     if (!res)
                     {
-                        showError(res.error().error);
-                        m_title_mgr.cleanup();
+                        setConnexionError(
+                            std::get<WiiuConnexionError>(res.error()));
                     }
+                    else
+                        m_state = State_Connected;
                 }
             }
             else
@@ -436,26 +442,57 @@ void MainWindow::renderHeader()
             ImGui::Separator();
             ImGui::Spacing();
 
-            ImGui::BeginDisabled(!m_title_mgr.connected());
+            ImGui::BeginDisabled(m_state != State_Connected);
 
             if (ImGui::MenuItem("Backup Wii U Data"))
             {
                 m_file_dialog.setDialogFlags(
                     ImGuiFileDialogFlags_Modal |
                     ImGuiFileDialogFlags_ConfirmOverwrite);
-                m_file_dialog.open(".zip", [this](const std::string& path)
-                                   { m_title_mgr.backupTitles(path); });
+                m_file_dialog.open(
+                    ".zip",
+                    [this](const std::string& path)
+                    {
+                        auto ret = m_title_mgr.backupTitles(path);
+                        if (!ret)
+                        {
+                            setConnexionError(
+                                std::get<WiiuConnexionError>(ret.error()));
+                        }
+                    });
             }
             if (ImGui::MenuItem("Restore Backup Data"))
             {
                 m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_Modal);
-                m_file_dialog.open(".zip", [this](const std::string& path)
-                                   { m_title_mgr.restoreBackup(path); });
+                m_file_dialog.open(
+                    ".zip",
+                    [this](const std::string& path)
+                    {
+                        auto ret = m_title_mgr.restoreBackup(path);
+                        if (!ret)
+                        {
+                            std::visit(
+                                overloaded{
+                                    std::bind(&MainWindow::setConnexionError,
+                                              this, std::placeholders::_1),
+                                    [this](const ZipError& err) {
+                                        showError(fmt::format(
+                                            "Error while opening ZIP : {}",
+                                            err.msg));
+                                    } },
+                                ret.error());
+                        }
+                    });
             }
             ImGui::BeginDisabled(m_title_mgr.getDirtyTitles().size() == 0);
             if (ImGui::MenuItem("Sync Changes"))
             {
-                m_title_mgr.syncTitles();
+                auto ret = m_title_mgr.syncTitles();
+                if (!ret)
+                {
+                    setConnexionError(
+                        std::get<WiiuConnexionError>(ret.error()));
+                }
             }
             ImGui::EndDisabled();
 
@@ -557,7 +594,7 @@ void MainWindow::render(bool quit)
 
     renderHeader();
 
-    ImGui::BeginDisabled(!m_title_mgr.connected());
+    ImGui::BeginDisabled(m_state != State_Connected);
     renderTitleList();
     ImGui::EndDisabled();
 

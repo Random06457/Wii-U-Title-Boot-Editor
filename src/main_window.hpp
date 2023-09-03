@@ -10,6 +10,13 @@
 class MainWindow
 {
 private:
+    enum State
+    {
+        State_Disconnected,
+        State_Connecting,
+        State_Connected,
+        State_ConnectionFailed,
+    };
     struct Selection
     {
         Selection(TitleMeta& meta);
@@ -34,6 +41,8 @@ private:
     void showPopup(std::function<void()> func);
     void showError(const std::string& error);
 
+    void setConnexionError(const WiiuConnexionError& err);
+
 public:
     MainWindow();
 
@@ -52,4 +61,5 @@ private:
     int m_title_type = TitleType_MLC;
     SoundPlayer m_player;
     bool m_should_quit = false;
+    State m_state = State_Disconnected;
 };
