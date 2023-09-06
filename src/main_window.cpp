@@ -325,7 +325,7 @@ void MainWindow::renderTitleList()
 
     if (ImGui::Combo("Storage", &m_title_type, labels, ARRAY_COUNT(labels)))
     {
-        clearSelection();
+        clearSelection(false);
     }
     ImGui::Spacing();
     ImGui::Separator();
@@ -405,12 +405,15 @@ void MainWindow::renderTitleList()
     ImGui::EndChild();
 }
 
-void MainWindow::clearSelection()
+void MainWindow::clearSelection(bool lock)
 {
-    std::lock_guard<std::mutex> lock(m_curr_meta_lock);
+    if (lock)
+        m_curr_meta_lock.lock();
     m_player.setSound(nullptr);
     m_selected_idx = -1;
     m_curr_meta.reset();
+    if (lock)
+        m_curr_meta_lock.unlock();
 }
 
 void MainWindow::setConnexionError(const WiiuConnexionError& err)

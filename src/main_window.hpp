@@ -45,7 +45,7 @@ private:
     void showError(const std::string& error);
 
     void setConnexionError(const WiiuConnexionError& err);
-    void clearSelection();
+    void clearSelection(bool lock = true);
 
 public:
     MainWindow();
