@@ -410,8 +410,8 @@ auto TitleMgr::getTitle(const TitleId& title_id, ProgressReport* reporter)
                 return Unexpected(MetaDirMissingFileError{ name });            \
             return Unexpected(WiiuConnexionError{ m_error });                  \
         }                                                                      \
-        std::move(PROPAGATE(parse_func(                                        \
-            reinterpret_cast<const void*>(buff.data()), buff.size())));        \
+        PROPAGATE(parse_func(reinterpret_cast<const void*>(buff.data()),       \
+                             buff.size()));                                    \
     })
 
     Image drc_tex = DOWNLOAD_FILE("bootDrcTex.tga", Image::fromWiiU);
