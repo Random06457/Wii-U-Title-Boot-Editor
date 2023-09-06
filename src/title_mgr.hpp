@@ -6,6 +6,7 @@
 #include "utils.hpp"
 #define LINUX
 #include <FTP/FTPClient.h>
+#include "progress.hpp"
 
 enum TitleType
 {
@@ -62,16 +63,18 @@ public:
 
     const std::vector<TitleId>& getTitles() { return m_titles; }
 
-    bool isTitleDirty(const TitleId& title_id) const;
-    std::vector<TitleId> getDirtyTitles() const;
+    bool isTitleDirty(const TitleId& title_id);
+    std::vector<TitleId> getDirtyTitles();
     auto syncTitles() -> Error<WiiuConnexionError>;
-    auto getTitle(const TitleId& title_id)
+    auto getTitle(const TitleId& title_id, ProgressReport* reporter)
         -> Result<TitleMeta*, WiiuConnexionError, ImageError, SoundError,
                   MetaDirMissingFileError>;
 
-    auto backupTitles(const std::filesystem::path& zip) const
+    auto backupTitles(const std::filesystem::path& zip,
+                      ProgressReport* reporter = nullptr) const
         -> Error<WiiuConnexionError>;
-    auto restoreBackup(const std::filesystem::path& zip)
+    auto restoreBackup(const std::filesystem::path& zip,
+                       ProgressReport* reporter = nullptr)
         -> Error<ZipError, WiiuConnexionError>;
 
 private:
@@ -88,6 +91,7 @@ private:
 
 private:
     std::unordered_map<TitleId, TitleMeta> m_cache;
+    std::mutex m_cache_lock;
     std::vector<TitleId> m_titles;
     std::string m_error;
     embeddedmz::CFTPClient m_ftp;

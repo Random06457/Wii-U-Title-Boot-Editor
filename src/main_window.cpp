@@ -14,12 +14,19 @@ MainWindow::MainWindow()
     snprintf(m_ip, sizeof(m_ip), "192.168.0.10");
 }
 
+MainWindow::~MainWindow()
+{
+    if (m_work_thread.joinable())
+        m_work_thread.join();
+}
+
 MainWindow::Selection::Selection(TitleMeta& title_meta) :
     meta(title_meta),
-    drc_tex(meta.drcTex()),
-    tv_tex(meta.tvTex()),
-    logo_tex(meta.logoTex()),
-    icon_tex(meta.iconTex()),
+    img_loaded(false),
+    drc_tex(),
+    tv_tex(),
+    logo_tex(),
+    icon_tex(),
     target_idx(static_cast<int>(meta.sound().target())),
     loop_sample(static_cast<int>(meta.sound().loopSample()))
 {
@@ -232,6 +239,16 @@ void MainWindow::renderTex()
     };
 
     {
+        // delay opengl image loading to avoid multithread issue (create the
+        // texture in a different thread without wharing opengl resources)
+        if (!m_curr_meta->img_loaded)
+        {
+            m_curr_meta->drc_tex = m_curr_meta->meta.drcTex();
+            m_curr_meta->tv_tex = m_curr_meta->meta.tvTex();
+            m_curr_meta->logo_tex = m_curr_meta->meta.logoTex();
+            m_curr_meta->icon_tex = m_curr_meta->meta.iconTex();
+            m_curr_meta->img_loaded = true;
+        }
 
         ImGui::BeginChild("## Big Textures", { 340, 0 });
         show_tex(m_curr_meta->tv_tex, m_curr_meta->meta.tvTex(), "TV Texture",
@@ -308,8 +325,7 @@ void MainWindow::renderTitleList()
 
     if (ImGui::Combo("Storage", &m_title_type, labels, ARRAY_COUNT(labels)))
     {
-        m_selected_idx = -1;
-        m_curr_meta.reset();
+        clearSelection();
     }
     ImGui::Spacing();
     ImGui::Separator();
@@ -328,6 +344,9 @@ void MainWindow::renderTitleList()
             if (title_id.title_type != m_title_type)
                 continue;
 
+            if (m_state != State_Connected)
+                break;
+
             bool is_dirty = m_title_mgr.isTitleDirty(title_id);
 
             if (ImGui::Selectable(
@@ -337,37 +356,48 @@ void MainWindow::renderTitleList()
             {
                 if (i != m_selected_idx)
                 {
-                    auto meta = m_title_mgr.getTitle(title_id);
-                    if (!meta)
-                    {
-                        std::visit(
-                            overloaded{
-                                std::bind(&MainWindow::setConnexionError, this,
-                                          std::placeholders::_1),
-                                [this](const MetaDirMissingFileError& err) {
-                                    showError(fmt::format("Could not find {}",
-                                                          err.filename));
-                                },
-                                [this](const SoundError&)
-                                { showError("Invalid BTSND File"); },
-                                [this](const ImageError&) {
-                                    showError(
-                                        "Invalid or unsupported TGA File");
-                                } },
-                            meta.error());
-
-                        if (std::holds_alternative<WiiuConnexionError>(
-                                meta.error()))
+                    if (m_work_thread.joinable())
+                        m_work_thread.join();
+                    m_work_thread = std::thread(
+                        [this, &title_id, i]()
                         {
-                            break;
-                        }
-                        continue;
-                    }
-
-                    m_curr_meta = std::make_unique<Selection>(**meta);
-                    m_player.setSound(&meta.value()->sound());
+                            auto meta = m_title_mgr.getTitle(title_id,
+                                                             &m_task_progress);
+                            m_task_progress.reportDone();
+                            if (!meta)
+                            {
+                                std::visit(
+                                    overloaded{
+                                        std::bind(
+                                            &MainWindow::setConnexionError,
+                                            this, std::placeholders::_1),
+                                        [this](
+                                            const MetaDirMissingFileError& err)
+                                        {
+                                            showError(
+                                                fmt::format("Could not find {}",
+                                                            err.filename));
+                                        },
+                                        [this](const SoundError&)
+                                        { showError("Invalid BTSND File"); },
+                                        [this](const ImageError&)
+                                        {
+                                            showError("Invalid or unsupported "
+                                                      "TGA File");
+                                        } },
+                                    meta.error());
+                            }
+                            else
+                            {
+                                std::lock_guard<std::mutex> lock(
+                                    m_curr_meta_lock);
+                                m_curr_meta =
+                                    std::make_unique<Selection>(**meta);
+                                m_player.setSound(&meta.value()->sound());
+                                m_selected_idx = i;
+                            }
+                        });
                 }
-                m_selected_idx = i;
             }
         }
     }
@@ -375,11 +405,20 @@ void MainWindow::renderTitleList()
     ImGui::EndChild();
 }
 
+void MainWindow::clearSelection()
+{
+    std::lock_guard<std::mutex> lock(m_curr_meta_lock);
+    m_player.setSound(nullptr);
+    m_selected_idx = -1;
+    m_curr_meta.reset();
+}
+
 void MainWindow::setConnexionError(const WiiuConnexionError& err)
 {
     showError(err.error);
     m_state = State_ConnectionFailed;
-    m_curr_meta.reset();
+
+    clearSelection();
     m_title_mgr.cleanup();
 }
 
@@ -453,12 +492,21 @@ void MainWindow::renderHeader()
                     ".zip",
                     [this](const std::string& path)
                     {
-                        auto ret = m_title_mgr.backupTitles(path);
-                        if (!ret)
-                        {
-                            setConnexionError(
-                                std::get<WiiuConnexionError>(ret.error()));
-                        }
+                        if (m_work_thread.joinable())
+                            m_work_thread.join();
+                        m_work_thread = std::thread(
+                            [this, path]()
+                            {
+                                auto ret = m_title_mgr.backupTitles(
+                                    path, &m_task_progress);
+                                m_task_progress.reportDone();
+                                if (!ret)
+                                {
+                                    setConnexionError(
+                                        std::get<WiiuConnexionError>(
+                                            ret.error()));
+                                }
+                            });
                     });
             }
             if (ImGui::MenuItem("Restore Backup Data"))
@@ -468,20 +516,34 @@ void MainWindow::renderHeader()
                     ".zip",
                     [this](const std::string& path)
                     {
-                        auto ret = m_title_mgr.restoreBackup(path);
-                        if (!ret)
-                        {
-                            std::visit(
-                                overloaded{
-                                    std::bind(&MainWindow::setConnexionError,
-                                              this, std::placeholders::_1),
-                                    [this](const ZipError& err) {
-                                        showError(fmt::format(
-                                            "Error while opening ZIP : {}",
-                                            err.msg));
-                                    } },
-                                ret.error());
-                        }
+                        if (m_work_thread.joinable())
+                            m_work_thread.join();
+                        m_work_thread = std::thread(
+                            [this, path]()
+                            {
+                                clearSelection();
+
+                                auto ret = m_title_mgr.restoreBackup(
+                                    path, &m_task_progress);
+
+                                m_task_progress.reportDone();
+                                if (!ret)
+                                {
+                                    std::visit(
+                                        overloaded{
+                                            std::bind(
+                                                &MainWindow::setConnexionError,
+                                                this, std::placeholders::_1),
+                                            [this](const ZipError& err)
+                                            {
+                                                showError(fmt::format(
+                                                    "Error while opening ZIP : "
+                                                    "{}",
+                                                    err.msg));
+                                            } },
+                                        ret.error());
+                                }
+                            });
                     });
             }
             ImGui::BeginDisabled(m_title_mgr.getDirtyTitles().size() == 0);
@@ -521,6 +583,32 @@ void MainWindow::showError(const std::string& msg)
             if (ImGui::Button("OK", { 120, 0 }))
                 ImGui::CloseCurrentPopup();
         });
+}
+
+void MainWindow::renderTitleInfo()
+{
+    ImGui::BeginChild("Title Pane", { 0, 0 }, true);
+
+    if (m_curr_meta)
+    {
+        if (ImGui::BeginTabBar("## tabs"))
+        {
+            if (ImGui::BeginTabItem("Textures"))
+            {
+                renderTex();
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Sound"))
+            {
+                renderSound();
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
+        }
+    }
+    ImGui::EndChild();
 }
 
 void MainWindow::render(bool quit)
@@ -592,36 +680,32 @@ void MainWindow::render(bool quit)
         }
     }
 
+    ImGui::BeginDisabled(m_task_progress.isBusy());
+
     renderHeader();
 
-    ImGui::BeginDisabled(m_state != State_Connected);
-    renderTitleList();
-    ImGui::EndDisabled();
-
-    ImGui::SameLine();
+    ImGui::BeginChild("Main Content", { 0, m_task_progress.isBusy()
+                                               ? ImGui::GetWindowHeight() -
+                                                     ImGui::GetCursorPosY() - 28
+                                               : 0.0f });
     {
-        ImGui::BeginChild("Title Pane", { 0, 0 }, true);
+        std::lock_guard<std::mutex> lock(m_curr_meta_lock);
+        ImGui::BeginDisabled(m_state != State_Connected);
+        renderTitleList();
+        ImGui::SameLine();
+        renderTitleInfo();
+        ImGui::EndDisabled();
+    }
+    ImGui::EndChild();
 
-        if (m_curr_meta)
-        {
-            if (ImGui::BeginTabBar("## tabs"))
-            {
-                if (ImGui::BeginTabItem("Textures"))
-                {
-                    renderTex();
-                    ImGui::EndTabItem();
-                }
-
-                if (ImGui::BeginTabItem("Sound"))
-                {
-                    renderSound();
-                    ImGui::EndTabItem();
-                }
-
-                ImGui::EndTabBar();
-            }
-        }
-        ImGui::EndChild();
+    ImGui::EndDisabled();
+    if (m_task_progress.isBusy())
+    {
+        ImGui::ProgressBar(m_task_progress.ratio(), ImVec2(-FLT_MIN, 0),
+                           fmt::format("{:.0f}% : {}",
+                                       m_task_progress.ratio() * 100,
+                                       m_task_progress.reportText())
+                               .c_str());
     }
 
     ImGui::End();

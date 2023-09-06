@@ -3,6 +3,7 @@
 #include <vector>
 #include "file_dialog.hpp"
 #include "gl_image.hpp"
+#include "progress.hpp"
 #include "sound_player.hpp"
 #include "title_meta.hpp"
 #include "title_mgr.hpp"
@@ -22,6 +23,7 @@ private:
         Selection(TitleMeta& meta);
 
         TitleMeta& meta;
+        bool img_loaded = false;
         GlImage drc_tex;
         GlImage tv_tex;
         GlImage logo_tex;
@@ -32,6 +34,7 @@ private:
     };
 
     void renderTitleList();
+    void renderTitleInfo();
     void renderHeader();
     void renderSound();
     void renderTex();
@@ -42,9 +45,11 @@ private:
     void showError(const std::string& error);
 
     void setConnexionError(const WiiuConnexionError& err);
+    void clearSelection();
 
 public:
     MainWindow();
+    ~MainWindow();
 
     void render(bool quit);
     bool shouldQuit() const { return m_should_quit; }
@@ -52,6 +57,7 @@ public:
 private:
     long m_selected_idx = -1;
     std::unique_ptr<Selection> m_curr_meta;
+    std::mutex m_curr_meta_lock;
     TitleMgr m_title_mgr;
     char m_ip[4 * 4];
     bool m_is_ip_valid = true;
@@ -62,4 +68,7 @@ private:
     SoundPlayer m_player;
     bool m_should_quit = false;
     State m_state = State_Disconnected;
+
+    ProgressReport m_task_progress;
+    std::thread m_work_thread;
 };

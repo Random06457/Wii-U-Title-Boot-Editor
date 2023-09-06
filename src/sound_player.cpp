@@ -53,6 +53,8 @@ void SoundPlayer::setSound(const Sound* sound)
     {
         auto x = reinterpret_cast<SoundPlayer*>(udata);
 
+        std::lock_guard<std::mutex> lock(x->m_buffered_lock);
+
         size_t rest = x->sound().sampleDataSize() - x->m_curr_buffered;
         size_t to_copy = std::min<size_t>(static_cast<size_t>(len), rest);
         memcpy(stream, x->sound().sampleData<Uint8>(x->m_curr_buffered),

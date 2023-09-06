@@ -82,11 +82,10 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
     return {};
 }
 
-auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
+auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path,
+                             ProgressReport* reporter)
     -> Error<ZipError, WiiuConnexionError>
 {
-    m_cache.clear();
-
     int err_code = 0;
     zip* z = zip_open(zip_path.string().c_str(), ZIP_RDONLY, &err_code);
     if (z == nullptr)
@@ -99,13 +98,24 @@ auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
         return Unexpected(ZipError{ zip_error_strerror(&error) });
     }
 
+    size_t progress_i = 0;
+
     auto process_file =
-        [this, z](const TitleId& title_id,
-                  const std::string& name) -> Error<WiiuConnexionError>
+        [this, z, reporter,
+         &progress_i](const TitleId& title_id,
+                      const std::string& name) -> Error<WiiuConnexionError>
     {
         auto path = fmt::format(
             "{}_{}/{}", title_id.title_type == TitleType_MLC ? "mlc" : "usb",
             title_id.title_id, name);
+
+        if (reporter)
+            reporter->reportStep(
+                progress_i++,
+                fmt::format("{}: {} : {}",
+                            title_id.title_type == TitleType_MLC ? "MLC"
+                                                                 : "USB",
+                            title_id.title_id, name));
 
         zip_stat_t stat;
         if (zip_stat(z, path.c_str(), 0, &stat) == -1)
@@ -136,6 +146,9 @@ auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
                               buf.size());
     };
 
+    if (reporter)
+        reporter->setCount(m_titles.size() * 5);
+
     for (auto& title_id : m_titles)
     {
         PROPAGATE_VOID(process_file(title_id, "bootDrcTex.tga"));
@@ -146,18 +159,23 @@ auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path)
     }
 
     zip_close(z);
+
+    std::lock_guard<std::mutex> lock(m_cache_lock);
+    m_cache.clear();
     return {};
 }
 
-bool TitleMgr::isTitleDirty(const TitleId& title_id) const
+bool TitleMgr::isTitleDirty(const TitleId& title_id)
 {
+    std::lock_guard<std::mutex> lock(m_cache_lock);
     if (!m_cache.contains(title_id))
         return false;
     return m_cache.at(title_id).isDirty();
 }
 
-std::vector<TitleId> TitleMgr::getDirtyTitles() const
+std::vector<TitleId> TitleMgr::getDirtyTitles()
 {
+    std::lock_guard<std::mutex> lock(m_cache_lock);
     std::vector<TitleId> ret;
     for (auto& [title_id, title] : m_cache)
     {
@@ -172,7 +190,9 @@ auto TitleMgr::syncTitles() -> Error<WiiuConnexionError>
     auto titles = getDirtyTitles();
     for (auto& title_id : titles)
     {
+        m_cache_lock.lock();
         auto& title = m_cache.at(title_id);
+        m_cache_lock.unlock();
 
 #define UPLOAD_FILE(name, expr)                                                \
     {                                                                          \
@@ -197,7 +217,8 @@ auto TitleMgr::syncTitles() -> Error<WiiuConnexionError>
     return {};
 }
 
-auto TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
+auto TitleMgr::backupTitles(const std::filesystem::path& zip_path,
+                            ProgressReport* reporter) const
     -> Error<WiiuConnexionError>
 {
     int err_code = 0;
@@ -207,10 +228,21 @@ auto TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
 
     zip* z = zip_open(zip_path.string().c_str(), ZIP_CREATE, &err_code);
 
+    size_t progress_i = 0;
+
     auto process_file =
-        [this, z](const TitleId& title_id,
-                  const std::string& name) -> Error<WiiuConnexionError>
+        [this, &z, &progress_i,
+         reporter](const TitleId& title_id,
+                   const std::string& name) -> Error<WiiuConnexionError>
     {
+        if (reporter)
+            reporter->reportStep(
+                progress_i++,
+                fmt::format("{}: {} : Downloading {}",
+                            title_id.title_type == TitleType_MLC ? "MLC"
+                                                                 : "USB",
+                            title_id.title_id, name));
+
         auto file = downloadMetaFile(title_id, name);
         if (!file)
         {
@@ -236,6 +268,9 @@ auto TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
         return {};
     };
 
+    if (reporter)
+        reporter->setCount(m_titles.size() * 6);
+
     for (auto& title_id : m_titles)
     {
         PROPAGATE_VOID(process_file(title_id, "bootDrcTex.tga"));
@@ -243,6 +278,18 @@ auto TitleMgr::backupTitles(const std::filesystem::path& zip_path) const
         PROPAGATE_VOID(process_file(title_id, "bootLogoTex.tga"));
         PROPAGATE_VOID(process_file(title_id, "iconTex.tga"));
         PROPAGATE_VOID(process_file(title_id, "bootSound.btsnd"));
+
+        if (reporter)
+            reporter->reportStep(
+                progress_i++,
+                fmt::format("{}: {} : Writing ZIP",
+                            title_id.title_type == TitleType_MLC ? "MLC"
+                                                                 : "USB",
+                            title_id.title_id));
+
+        // flush zip
+        zip_close(z);
+        z = zip_open(zip_path.string().c_str(), 0, &err_code);
     }
 
     zip_close(z);
@@ -290,7 +337,10 @@ auto TitleMgr::ls(const std::filesystem::path& dir)
 
 auto TitleMgr::connect(const std::string& ip) -> Error<WiiuConnexionError>
 {
-    m_cache.clear();
+    {
+        std::lock_guard<std::mutex> lock(m_cache_lock);
+        m_cache.clear();
+    }
     m_titles.clear();
     m_error.clear();
 
@@ -332,15 +382,24 @@ auto TitleMgr::connect(const std::string& ip) -> Error<WiiuConnexionError>
     return {};
 }
 
-auto TitleMgr::getTitle(const TitleId& title_id)
+auto TitleMgr::getTitle(const TitleId& title_id, ProgressReport* reporter)
     -> Result<TitleMeta*, WiiuConnexionError, ImageError, SoundError,
               MetaDirMissingFileError>
 {
-    if (m_cache.contains(title_id))
-        return &m_cache.at(title_id);
+    {
+        std::lock_guard<std::mutex> lock(m_cache_lock);
+        if (m_cache.contains(title_id))
+            return &m_cache.at(title_id);
+    }
+
+    size_t i = 0;
+    if (reporter)
+        reporter->setCount(5);
 
 #define DOWNLOAD_FILE(name, parse_func)                                        \
     ({                                                                         \
+        if (reporter)                                                          \
+            reporter->reportStep(i++, name);                                   \
         auto path = title_id.getMetaPath(name);                                \
         std::vector<char> buff;                                                \
         CURLcode curl_ret;                                                     \
@@ -366,6 +425,9 @@ auto TitleMgr::getTitle(const TitleId& title_id)
         TitleMeta(std::move(drc_tex), std::move(tv_tex), std::move(logo_tex),
                   std::move(icon_tex), std::move(btsnd));
 
-    m_cache.emplace(title_id, std::move(meta));
-    return &m_cache.at(title_id);
+    {
+        std::lock_guard<std::mutex> lock(m_cache_lock);
+        m_cache.emplace(title_id, std::move(meta));
+        return &m_cache.at(title_id);
+    }
 }
