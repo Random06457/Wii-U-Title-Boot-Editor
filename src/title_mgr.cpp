@@ -185,9 +185,15 @@ std::vector<TitleId> TitleMgr::getDirtyTitles()
     return ret;
 }
 
-auto TitleMgr::syncTitles() -> Error<WiiuConnexionError>
+auto TitleMgr::syncTitles(ProgressReport* reporter) -> Error<WiiuConnexionError>
 {
     auto titles = getDirtyTitles();
+
+    if (reporter)
+        reporter->setCount(titles.size() * 5);
+
+    size_t i = 0;
+
     for (auto& title_id : titles)
     {
         m_cache_lock.lock();
@@ -196,6 +202,12 @@ auto TitleMgr::syncTitles() -> Error<WiiuConnexionError>
 
 #define UPLOAD_FILE(name, expr)                                                \
     {                                                                          \
+        if (reporter)                                                          \
+            reporter->reportStep(                                              \
+                i++, fmt::format("{}: {} : Uploading {}",                      \
+                                 title_id.title_type == TitleType_MLC ? "MLC"  \
+                                                                      : "USB", \
+                                 title_id.title_id, name));                    \
         auto buf = expr;                                                       \
         auto ret = uploadMetaFile(title_id, name,                              \
                                   reinterpret_cast<const void*>(buf.data()),   \

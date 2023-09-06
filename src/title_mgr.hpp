@@ -65,7 +65,8 @@ public:
 
     bool isTitleDirty(const TitleId& title_id);
     std::vector<TitleId> getDirtyTitles();
-    auto syncTitles() -> Error<WiiuConnexionError>;
+    auto syncTitles(ProgressReport* reporter = nullptr)
+        -> Error<WiiuConnexionError>;
     auto getTitle(const TitleId& title_id, ProgressReport* reporter)
         -> Result<TitleMeta*, WiiuConnexionError, ImageError, SoundError,
                   MetaDirMissingFileError>;

@@ -552,12 +552,20 @@ void MainWindow::renderHeader()
             ImGui::BeginDisabled(m_title_mgr.getDirtyTitles().size() == 0);
             if (ImGui::MenuItem("Sync Changes"))
             {
-                auto ret = m_title_mgr.syncTitles();
-                if (!ret)
-                {
-                    setConnexionError(
-                        std::get<WiiuConnexionError>(ret.error()));
-                }
+                if (m_work_thread.joinable())
+                    m_work_thread.join();
+                m_work_thread = std::thread(
+                    [this]()
+                    {
+                        auto ret = m_title_mgr.syncTitles(&m_task_progress);
+                        m_task_progress.reportDone();
+
+                        if (!ret)
+                        {
+                            setConnexionError(
+                                std::get<WiiuConnexionError>(ret.error()));
+                        }
+                    });
             }
             ImGui::EndDisabled();
 
