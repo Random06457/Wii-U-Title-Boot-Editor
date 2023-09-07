@@ -191,7 +191,7 @@ void MainWindow::renderTex()
             {
                 m_file_dialog.setDialogFlags(ImGuiFileDialogFlags_Modal);
                 m_file_dialog.open(
-                    ".png,.jpg,.jpeg",
+                    ".png,.jpg,.jpeg,.bmp,.gif,.psd,.pic,.pnm,.hdr,.tga",
                     [this, &img, &gl_img](const std::string& path)
                     {
                         auto img_file = File::readAllBytes(path);
@@ -222,8 +222,7 @@ void MainWindow::renderTex()
                 m_file_dialog.setDialogFlags(
                     ImGuiFileDialogFlags_ConfirmOverwrite |
                     ImGuiFileDialogFlags_Modal);
-                m_file_dialog.open(".png,.jpg,.jpeg",
-                                   [&img](const std::string& path)
+                m_file_dialog.open(".png", [&img](const std::string& path)
                                    { img.saveAsPng(path); });
             }
 
