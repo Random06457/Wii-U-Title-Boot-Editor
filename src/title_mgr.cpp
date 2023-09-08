@@ -16,7 +16,7 @@ std::filesystem::path TitleId::getMetaPath(const std::string& name) const
 }
 
 TitleMgr::TitleMgr() :
-    m_cache(),
+    m_title_cache(),
     m_titles(),
     m_ftp(
         [this](const std::string& msg)
@@ -33,23 +33,32 @@ TitleMgr::~TitleMgr()
 }
 
 auto TitleMgr::downloadMetaFile(const TitleId& title_id,
-                                const std::string& name) const
+                                const std::string& name)
     -> Result<std::vector<char>, WiiuConnexionError, MetaDirMissingFileError>
 {
-    auto path = title_id.getMetaPath(name);
+    auto path = title_id.getMetaPath(name).string();
+
+    std::lock_guard<std::mutex> lock(m_file_cache_lock);
+    if (m_file_cache.contains(path))
+        return m_file_cache.at(path);
+
     std::vector<char> buff;
     CURLcode curl_ret;
-    if (!m_ftp.DownloadFile(path.string(), buff, curl_ret))
+    fmt::print("FTP: Downloading \"{}\"\n", path);
+    if (!m_ftp.DownloadFile(path, buff, curl_ret))
     {
         if (curl_ret == CURLE_REMOTE_FILE_NOT_FOUND)
             return Unexpected(MetaDirMissingFileError{ name });
         return Unexpected(WiiuConnexionError{ m_error });
     }
+
+    m_file_cache.emplace(path, buff);
+
     return buff;
 }
 
 auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
-                              const void* data, size_t data_size) const
+                              const void* data, size_t data_size)
     -> Error<WiiuConnexionError>
 {
 
@@ -64,7 +73,7 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
         .pos = 0,
     };
 
-    auto path = title_id.getMetaPath(name);
+    auto path = title_id.getMetaPath(name).string();
     auto callback = [](void* ptr, size_t size, size_t nmemb,
                        void* usr) -> size_t
     {
@@ -75,9 +84,14 @@ auto TitleMgr::uploadMetaFile(const TitleId& title_id, const std::string& name,
         return actual_read;
     };
 
-    fmt::print("FTP: Uploading \"{}\"\n", path.string());
-    if (!m_ftp.UploadFile(callback, &cur_ctx, path.string()))
+    fmt::print("FTP: Uploading \"{}\"\n", path);
+    if (!m_ftp.UploadFile(callback, &cur_ctx, path))
         return Unexpected(WiiuConnexionError{ m_error });
+
+    std::lock_guard<std::mutex> lock(m_file_cache_lock);
+    std::vector<char> buf(data_size);
+    std::memcpy(buf.data(), data, data_size);
+    m_file_cache.emplace(path, std::move(buf));
 
     return {};
 }
@@ -147,7 +161,7 @@ auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path,
     };
 
     if (reporter)
-        reporter->setCount(m_titles.size() * 5);
+        reporter->setCount(m_titles.size() * 6);
 
     for (auto& title_id : m_titles)
     {
@@ -156,28 +170,29 @@ auto TitleMgr::restoreBackup(const std::filesystem::path& zip_path,
         PROPAGATE_VOID(process_file(title_id, "bootLogoTex.tga"));
         PROPAGATE_VOID(process_file(title_id, "iconTex.tga"));
         PROPAGATE_VOID(process_file(title_id, "bootSound.btsnd"));
+        PROPAGATE_VOID(process_file(title_id, "meta.xml"));
     }
 
     zip_close(z);
 
-    std::lock_guard<std::mutex> lock(m_cache_lock);
-    m_cache.clear();
+    std::lock_guard<std::mutex> lock(m_title_cache_lock);
+    m_title_cache.clear();
     return {};
 }
 
 bool TitleMgr::isTitleDirty(const TitleId& title_id)
 {
-    std::lock_guard<std::mutex> lock(m_cache_lock);
-    if (!m_cache.contains(title_id))
+    std::lock_guard<std::mutex> lock(m_title_cache_lock);
+    if (!m_title_cache.contains(title_id))
         return false;
-    return m_cache.at(title_id).isDirty();
+    return m_title_cache.at(title_id).isDirty();
 }
 
 std::vector<TitleId> TitleMgr::getDirtyTitles()
 {
-    std::lock_guard<std::mutex> lock(m_cache_lock);
+    std::lock_guard<std::mutex> lock(m_title_cache_lock);
     std::vector<TitleId> ret;
-    for (auto& [title_id, title] : m_cache)
+    for (auto& [title_id, title] : m_title_cache)
     {
         if (title.isDirty())
             ret.push_back(title_id);
@@ -196,9 +211,9 @@ auto TitleMgr::syncTitles(ProgressReport* reporter) -> Error<WiiuConnexionError>
 
     for (auto& title_id : titles)
     {
-        m_cache_lock.lock();
-        auto& title = m_cache.at(title_id);
-        m_cache_lock.unlock();
+        m_title_cache_lock.lock();
+        auto& title = m_title_cache.at(title_id);
+        m_title_cache_lock.unlock();
 
 #define UPLOAD_FILE(name, expr)                                                \
     {                                                                          \
@@ -230,7 +245,7 @@ auto TitleMgr::syncTitles(ProgressReport* reporter) -> Error<WiiuConnexionError>
 }
 
 auto TitleMgr::backupTitles(const std::filesystem::path& zip_path,
-                            ProgressReport* reporter) const
+                            ProgressReport* reporter)
     -> Error<WiiuConnexionError>
 {
     int err_code = 0;
@@ -281,7 +296,7 @@ auto TitleMgr::backupTitles(const std::filesystem::path& zip_path,
     };
 
     if (reporter)
-        reporter->setCount(m_titles.size() * 6);
+        reporter->setCount(m_titles.size() * 7);
 
     for (auto& title_id : m_titles)
     {
@@ -290,6 +305,7 @@ auto TitleMgr::backupTitles(const std::filesystem::path& zip_path,
         PROPAGATE_VOID(process_file(title_id, "bootLogoTex.tga"));
         PROPAGATE_VOID(process_file(title_id, "iconTex.tga"));
         PROPAGATE_VOID(process_file(title_id, "bootSound.btsnd"));
+        PROPAGATE_VOID(process_file(title_id, "meta.xml"));
 
         if (reporter)
             reporter->reportStep(
@@ -350,8 +366,10 @@ auto TitleMgr::ls(const std::filesystem::path& dir)
 auto TitleMgr::connect(const std::string& ip) -> Error<WiiuConnexionError>
 {
     {
-        std::lock_guard<std::mutex> lock(m_cache_lock);
-        m_cache.clear();
+        std::lock_guard<std::mutex> lock(m_title_cache_lock);
+        m_title_cache.clear();
+        std::lock_guard<std::mutex> lock2(m_file_cache_lock);
+        m_file_cache.clear();
     }
     m_titles.clear();
     m_error.clear();
@@ -399,9 +417,9 @@ auto TitleMgr::getTitle(const TitleId& title_id, ProgressReport* reporter)
               MetaDirMissingFileError>
 {
     {
-        std::lock_guard<std::mutex> lock(m_cache_lock);
-        if (m_cache.contains(title_id))
-            return &m_cache.at(title_id);
+        std::lock_guard<std::mutex> lock(m_title_cache_lock);
+        if (m_title_cache.contains(title_id))
+            return &m_title_cache.at(title_id);
     }
 
     size_t i = 0;
@@ -412,16 +430,7 @@ auto TitleMgr::getTitle(const TitleId& title_id, ProgressReport* reporter)
     ({                                                                         \
         if (reporter)                                                          \
             reporter->reportStep(i++, name);                                   \
-        auto path = title_id.getMetaPath(name);                                \
-        std::vector<char> buff;                                                \
-        CURLcode curl_ret;                                                     \
-        fmt::print("FTP: Downloading \"{}\"\n", path.string());                \
-        if (!m_ftp.DownloadFile(path.string(), buff, curl_ret))                \
-        {                                                                      \
-            if (curl_ret == CURLE_REMOTE_FILE_NOT_FOUND)                       \
-                return Unexpected(MetaDirMissingFileError{ name });            \
-            return Unexpected(WiiuConnexionError{ m_error });                  \
-        }                                                                      \
+        auto buff = PROPAGATE(downloadMetaFile(title_id, name));               \
         PROPAGATE(parse_func(reinterpret_cast<const void*>(buff.data()),       \
                              buff.size()));                                    \
     })
@@ -438,8 +447,8 @@ auto TitleMgr::getTitle(const TitleId& title_id, ProgressReport* reporter)
                   std::move(icon_tex), std::move(btsnd));
 
     {
-        std::lock_guard<std::mutex> lock(m_cache_lock);
-        m_cache.emplace(title_id, std::move(meta));
-        return &m_cache.at(title_id);
+        std::lock_guard<std::mutex> lock(m_title_cache_lock);
+        m_title_cache.emplace(title_id, std::move(meta));
+        return &m_title_cache.at(title_id);
     }
 }

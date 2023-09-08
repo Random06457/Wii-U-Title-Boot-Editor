@@ -61,8 +61,8 @@ public:
     }
 
 private:
-    size_t m_count;
-    size_t m_step;
+    size_t m_count = 0;
+    size_t m_step = 0;
     std::string m_msg;
     std::mutex m_lock;
 };

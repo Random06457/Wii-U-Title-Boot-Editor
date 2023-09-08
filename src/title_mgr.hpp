@@ -58,7 +58,8 @@ public:
         m_ftp.CleanupSession();
         m_error.clear();
         m_titles.clear();
-        m_cache.clear();
+        m_title_cache.clear();
+        m_file_cache.clear();
     }
 
     const std::vector<TitleId>& getTitles() { return m_titles; }
@@ -72,7 +73,7 @@ public:
                   MetaDirMissingFileError>;
 
     auto backupTitles(const std::filesystem::path& zip,
-                      ProgressReport* reporter = nullptr) const
+                      ProgressReport* reporter = nullptr)
         -> Error<WiiuConnexionError>;
     auto restoreBackup(const std::filesystem::path& zip,
                        ProgressReport* reporter = nullptr)
@@ -81,18 +82,19 @@ public:
 private:
     auto ls(const std::filesystem::path& dir)
         -> Result<std::vector<std::string>, WiiuConnexionError>;
-    auto downloadMetaFile(const TitleId& title_id,
-                          const std::string& name) const
+    auto downloadMetaFile(const TitleId& title_id, const std::string& name)
         -> Result<std::vector<char>, WiiuConnexionError,
                   MetaDirMissingFileError>;
 
     auto uploadMetaFile(const TitleId& titlte_id, const std::string& name,
-                        const void* data, size_t size) const
+                        const void* data, size_t size)
         -> Error<WiiuConnexionError>;
 
 private:
-    std::unordered_map<TitleId, TitleMeta> m_cache;
-    std::mutex m_cache_lock;
+    std::unordered_map<TitleId, TitleMeta> m_title_cache;
+    std::mutex m_title_cache_lock;
+    std::unordered_map<std::string, std::vector<char>> m_file_cache;
+    std::mutex m_file_cache_lock;
     std::vector<TitleId> m_titles;
     std::string m_error;
     embeddedmz::CFTPClient m_ftp;
